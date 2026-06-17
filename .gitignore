@@ -1,0 +1,11 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# 민감 정보 (API 키는 코드에 넣지 말 것)
+*.env
+.env.local
