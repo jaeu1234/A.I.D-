@@ -51,8 +51,21 @@ export function getBreakAfterIndex() {
 }
 
 /**
- * 오늘 요일 인덱스 (0=월 ~ 4=금, 주말은 0으로 고정)
+ * 오늘 요일 인덱스 (0=월 ~ 4=금)
+ *
+ * 정책: 주말(토·일)에는 월요일(0) 시간표를 기준으로 고정 표시한다 — 의도된 동작.
+ * 학교가 쉬는 날에도 화면이 완전히 비어 보이지 않고, 다음 등교일인 월요일 기준
+ * 위치를 미리 보여주기 위함. 주말 여부 자체는 isWeekend()로 별도 확인한다.
  */
 export function getTodayIndex() {
   return Math.min(Math.max(new Date().getDay() - 1, 0), 4);
+}
+
+/**
+ * 오늘이 주말(토·일)인지 여부
+ * @returns {boolean}
+ */
+export function isWeekend() {
+  const day = new Date().getDay();
+  return day === 0 || day === 6;
 }

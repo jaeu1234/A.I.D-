@@ -133,6 +133,16 @@
 
     const $ = (id) => document.getElementById(id);
 
+    // HTML 이스케이프 (사용자 입력을 innerHTML에 삽입하기 전 필수)
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     // ── PIN 게이트 ──────────────────
     function tryPin() {
       if ($('pin').value === ADMIN_PIN) {
@@ -176,7 +186,7 @@
     // 선택 층의 방 목록 (복도/화장실 제외하고 실제 위치 가능한 방 위주, 전부 포함)
     function fillRooms() {
       const floor = Number($('fFloor').value);
-      const rooms = FLOORS[floor].rooms.filter(r => r.type !== 'hall');
+      const rooms = FLOORS[floor].rooms.filter(r => r.type !== 'hall' && r.type !== 'toilet');
       $('fRoom').innerHTML = rooms.map(r => `<option value="${r.id}">${r.label}</option>`).join('');
     }
 
@@ -215,11 +225,11 @@
         const t = TEACHERS.find(x => x.id === o.teacherId);
         const pLabel = PERIODS[o.periodIdx]?.label ?? '-';
         return `<tr>
-          <td>${o.date}</td>
-          <td>${t ? t.name : o.teacherId}</td>
-          <td>${pLabel}</td>
-          <td>${o.label}${o.floor != null ? ` <span style="color:#8a90a0">(${o.floor === 0 ? '지하' : o.floor + '층'})</span>` : ''}</td>
-          <td>${o.note || '-'}</td>
+          <td>${escapeHtml(o.date)}</td>
+          <td>${escapeHtml(t ? t.name : o.teacherId)}</td>
+          <td>${escapeHtml(pLabel)}</td>
+          <td>${escapeHtml(o.label)}${o.floor != null ? ` <span style="color:#8a90a0">(${o.floor === 0 ? '지하' : o.floor + '층'})</span>` : ''}</td>
+          <td>${o.note ? escapeHtml(o.note) : '-'}</td>
           <td><button class="del" data-i="${i}">삭제</button></td>
         </tr>`;
       }).join('');
@@ -245,7 +255,7 @@
       let rows = DAYS.map((day, d) => {
         const cells = PERIODS.map((_, p) => {
           const v = sched[d]?.[p];
-          return v ? `<td class="on">${v}</td>` : '<td>·</td>';
+          return v ? `<td class="on">${escapeHtml(v.label)}</td>` : '<td>·</td>';
         }).join('');
         return `<tr><th>${day}</th>${cells}</tr>`;
       }).join('');

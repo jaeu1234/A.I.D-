@@ -180,7 +180,7 @@
     import { PERIODS, DAYS, TEACHERS } from './src/data/schedule.js';
     import { FLOORS } from './src/data/floors.js';
     import {
-      getCurrentPeriodIndex, getTodayIndex,
+      getCurrentPeriodIndex, getTodayIndex, isWeekend,
     } from './src/lib/time.js';
     import {
       getTeacherLocation, buildTimeline, getNextMove, resolveRoom,
@@ -196,6 +196,16 @@
 
     const $ = (id) => document.getElementById(id);
     const canvas = $('map');
+
+    // HTML 이스케이프 (사용자 입력을 innerHTML에 삽입하기 전 필수)
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
 
     // ── 초기화 ────────────────────────
     initCanvas(canvas);
@@ -262,7 +272,8 @@
       const day = getTodayIndex();
       const pi  = getCurrentPeriodIndex();
       const loc = getTeacherLocation(id, day, pi);
-      const targetFloor = loc.floor ?? officeFloorFor(loc, currentFloor);
+      // loc.floor가 없으면(교무실 등 층이 정해지지 않은 위치) 현재 보고 있는 층을 유지
+      const targetFloor = loc.floor ?? currentFloor;
 
       if (FLOORS[targetFloor]) switchFloor(targetFloor);
       const room = resolveRoom(loc.room, loc.floor, currentFloor, FLOORS[currentFloor]);
@@ -270,11 +281,6 @@
       else render();
 
       renderInfo();
-    }
-
-    // 교무실 위치는 층이 없으니 현재 층 교무실을 사용
-    function officeFloorFor(loc, cur) {
-      return (loc.room === 'office') ? cur : cur;
     }
 
     // ── 정보 패널 렌더 ────────────────
@@ -292,9 +298,9 @@
       let nextHtml = '';
       if (move && move.toLoc) {
         const verb = move.isMovingNow ? '이동 중 →' : '다음';
-        nextHtml = `<div class="next">${verb} <b>${move.toPeriod.label}</b> · ${move.toLoc.label}</div>`;
+        nextHtml = `<div class="next">${verb} <b>${escapeHtml(move.toPeriod.label)}</b> · ${escapeHtml(move.toLoc.label)}</div>`;
       }
-      const noteHtml = cur.note ? `<div class="note">📌 ${cur.note}</div>` : '';
+      const noteHtml = cur.note ? `<div class="note">📌 ${escapeHtml(cur.note)}</div>` : '';
 
       const rows = timeline.map(({ pi, period, loc, status }) => {
         let pill = '';
@@ -304,18 +310,18 @@
           <div class="tl-row ${status}">
             <span class="tl-time">${period.start}</span>
             <span class="tl-period">${period.label}</span>
-            <span class="tl-loc">${loc.label}${pill}</span>
+            <span class="tl-loc">${escapeHtml(loc.label)}${pill}</span>
           </div>`;
       }).join('');
 
       panel.innerHTML = `
         <div class="info-head">
-          <div class="name">${t.name} <span style="font-size:14px;color:${t.color}">●</span></div>
-          <div class="subject">${t.subject} 선생님</div>
+          <div class="name">${escapeHtml(t.name)} <span style="font-size:14px;color:${t.color}">●</span></div>
+          <div class="subject">${escapeHtml(t.subject)} 선생님</div>
         </div>
         <div class="now-card">
           <div class="lbl">지금 위치</div>
-          <div class="loc">${cur.label}</div>
+          <div class="loc">${escapeHtml(cur.label)}</div>
           ${nextHtml}
           ${noteHtml}
         </div>
@@ -330,7 +336,8 @@
       const now = new Date();
       const hh = String(now.getHours()).padStart(2, '0');
       const mm = String(now.getMinutes()).padStart(2, '0');
-      $('clock').textContent = `${DAYS[getTodayIndex()]}요일 ${hh}:${mm}`;
+      const weekendNote = isWeekend() ? ' · 주말(월요일 시간표 기준)' : '';
+      $('clock').textContent = `${DAYS[getTodayIndex()]}요일 ${hh}:${mm}${weekendNote}`;
       const pi = getCurrentPeriodIndex();
       $('periodBadge').textContent = pi >= 0 ? PERIODS[pi].label : '쉬는 시간';
     }

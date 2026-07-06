@@ -1,6 +1,6 @@
 import { TEACHERS } from '../data/schedule.js';
 import { FLOORS } from '../data/floors.js';
-import { getTeacherLocation, resolveRoom, statusColor } from './location.js';
+import { getTeacherLocation, getNextMove, resolveRoom, statusColor } from './location.js';
 import { getCurrentPeriodIndex, getBreakAfterIndex, getTodayIndex } from './time.js';
 
 // ─────────────────────────────────────────────
@@ -224,25 +224,63 @@ function _drawTeacherRoute(ctx, teacherId) {
     ctx.globalAlpha = 1;
   }
 
-  // 다음 위치가 같은 층에 있으면 경로 표시
-  // (다음 교시 위치가 다른 층이면 생략)
+  // 다음 위치가 같은 층에 있으면 화살표로 동선 표시
+  // (다음 교시 위치가 다른 층이거나 없으면 생략)
+  const move = getNextMove(teacherId);
+  if (curRoom && move && move.toLoc) {
+    const nextRoom = resolveRoom(move.toLoc.room, move.toLoc.floor, _currentFloor, floor);
+    if (nextRoom && nextRoom.id !== curRoom.id) {
+      _drawRouteArrow(ctx, curRoom, nextRoom, t.color);
+    }
+  }
 }
 
-function _drawAllPins(ctx) {
-  const floor  = FLOORS[_currentFloor];
-  const day    = getTodayIndex();
-  const pi     = getCurrentPeriodIndex();
+/** 현재 방 → 다음 방으로 이어지는 점선 화살표 */
+function _drawRouteArrow(ctx, fromRoom, toRoom, color) {
+  const x1 = fromRoom.x + fromRoom.w / 2, y1 = fromRoom.y + fromRoom.h / 2;
+  const x2 = toRoom.x + toRoom.w / 2,     y2 = toRoom.y + toRoom.h / 2;
 
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle   = color;
+  ctx.lineWidth   = 2.5;
+  ctx.setLineDash([7, 5]);
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 화살촉
+  const angle   = Math.atan2(y2 - y1, x2 - x1);
+  const headLen = 11;
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 6), y2 - headLen * Math.sin(angle - Math.PI / 6));
+  ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 6), y2 - headLen * Math.sin(angle + Math.PI / 6));
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * 현재 층에 표시될 모든 선생님 핀의 실제 화면 좌표를 계산.
+ * 같은 방에 여러 선생님이 있으면 원형으로 분산 배치한다.
+ * _drawAllPins(렌더링)와 hitTestPin(클릭 판정)이 동일한 좌표를 사용해야
+ * 분산 배치된 핀도 정확히 클릭되므로, 계산 로직을 여기 한 곳에 모은다.
+ */
+function _computePinPositions(floor, day, pi) {
   // room별 선생님 묶기
   const byRoom = {};
   TEACHERS.forEach(t => {
-    const loc    = getTeacherLocation(t.id, day, pi);
-    const room   = resolveRoom(loc.room, loc.floor, _currentFloor, floor);
+    const loc  = getTeacherLocation(t.id, day, pi);
+    const room = resolveRoom(loc.room, loc.floor, _currentFloor, floor);
     if (!room) return;
     byRoom[room.id] ??= [];
     byRoom[room.id].push({ t, loc });
   });
 
+  const positions = [];
   Object.entries(byRoom).forEach(([roomId, entries]) => {
     const room = floor.rooms.find(r => r.id === roomId);
     if (!room) return;
@@ -253,10 +291,23 @@ function _drawAllPins(ctx) {
     entries.forEach(({ t, loc }, i) => {
       const angle  = (i / n) * Math.PI * 2 - Math.PI / 2;
       const spread = n === 1 ? 0 : 16;
-      const px = cx + Math.cos(angle) * spread;
-      const py = cy + Math.sin(angle) * spread;
-      _drawPin(ctx, px, py, t, loc, _selectedId === t.id);
+      positions.push({
+        t, loc,
+        px: cx + Math.cos(angle) * spread,
+        py: cy + Math.sin(angle) * spread,
+      });
     });
+  });
+  return positions;
+}
+
+function _drawAllPins(ctx) {
+  const floor = FLOORS[_currentFloor];
+  const day   = getTodayIndex();
+  const pi    = getCurrentPeriodIndex();
+
+  _computePinPositions(floor, day, pi).forEach(({ t, loc, px, py }) => {
+    _drawPin(ctx, px, py, t, loc, _selectedId === t.id);
   });
 }
 
@@ -291,20 +342,18 @@ function _drawPin(ctx, px, py, t, loc, selected) {
  * 스크린 좌표 클릭 → 선생님 id 반환 (없으면 null)
  */
 export function hitTestPin(sx, sy) {
-  const w = s2w(sx, sy);
+  const w     = s2w(sx, sy);
   const floor = FLOORS[_currentFloor];
   const day   = getTodayIndex();
   const pi    = getCurrentPeriodIndex();
 
-  for (const t of TEACHERS) {
-    const loc  = getTeacherLocation(t.id, day, pi);
-    const room = resolveRoom(loc.room, loc.floor, _currentFloor, floor);
-    if (!room) continue;
-
-    const cx = room.x + room.w / 2;
-    const cy = room.y + room.h / 2;
-    const r  = _selectedId === t.id ? 15 : 12;
-    if (Math.hypot(w.x - cx, w.y - cy) < r + 4) return t.id;
+  // _drawAllPins와 동일한 분산 좌표를 사용해야 같은 방 다수 핀도 정확히 클릭된다.
+  // 나중에 그려진(위에 겹쳐진) 핀부터 검사해 화면상 위쪽 핀이 우선 선택되게 한다.
+  const positions = _computePinPositions(floor, day, pi);
+  for (let i = positions.length - 1; i >= 0; i--) {
+    const { t, px, py } = positions[i];
+    const r = _selectedId === t.id ? 15 : 12;
+    if (Math.hypot(w.x - px, w.y - py) < r + 4) return t.id;
   }
   return null;
 }

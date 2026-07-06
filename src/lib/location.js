@@ -1,5 +1,5 @@
-import { PERIODS, TEACHERS } from '../data/schedule.js';
-import { OFFICE_IDS } from '../data/floors.js';
+import { PERIODS, TEACHERS, buildSchedule } from '../data/schedule.js';
+import { OFFICE_IDS, findRoomFloor } from '../data/floors.js';
 import { getCurrentPeriodIndex, getNextPeriodIndex, getBreakAfterIndex, getTodayIndex } from './time.js';
 
 // ─────────────────────────────────────────────
@@ -35,12 +35,14 @@ export function saveAiSchedule(teacherId, schedule) {
 // ─────────────────────────────────────────────
 
 /**
- * 선생님의 실제 적용 시간표 반환
+ * 선생님의 실제 적용 시간표 반환 (ClassCell 그리드)
  * AI 저장 > 기본 하드코딩 순서
+ * AI 시간표는 localStorage에 원본 문자열 그리드로 저장되므로,
+ * 기본 시간표와 동일한 ClassCell 형태로 정규화해서 반환한다.
  */
 export function getEffectiveSchedule(teacherId) {
   const ai = loadAiSchedules();
-  if (ai[teacherId]) return ai[teacherId].schedule;
+  if (ai[teacherId]) return buildSchedule(ai[teacherId].schedule);
   const t = TEACHERS.find(x => x.id === teacherId);
   return t?.schedule ?? null;
 }
@@ -99,15 +101,15 @@ export function getTeacherLocation(teacherId, dayIdx, periodIdx) {
 
   const cls = schedule[dayIdx]?.[periodIdx];
   if (cls) {
-    // "과목(학년-반)" 파싱 → ex. "수학(2-1)" → floor=2, roomId='2-1'
-    const m = cls.match(/\((\d+)-(\d+)\)/);
-    if (m) {
-      const floor  = parseInt(m[1], 10);
-      const roomId = `${m[1]}-${m[2]}`;
-      return { type: 'class', label: cls, room: roomId, floor };
+    // ClassCell: { subject, grade, class, label }. 학년-반이 있으면 그 교실로,
+    // 없으면(예: '체육'처럼 과목만 있는 경우) 교무실로 fallback.
+    // 주의: 학년 숫자와 실제 건물 층수가 다르므로(예: 1학년 교실이 5층에 있음)
+    // floor는 "학년"이 아니라 FLOORS 데이터에서 실제 위치를 조회해서 구한다.
+    if (cls.grade != null && cls.class != null) {
+      const roomId = `${cls.grade}-${cls.class}`;
+      return { type: 'class', label: cls.label, room: roomId, floor: findRoomFloor(roomId) };
     }
-    // 학년-반 없이 과목만 (예: '체육') → 교무실로 fallback
-    return { type: 'class', label: cls, room: 'office', floor: null };
+    return { type: 'class', label: cls.label, room: 'office', floor: null };
   }
 
   return { type: 'office', label: '교무실', room: 'office', floor: null };
@@ -184,6 +186,7 @@ export function resolveRoom(roomId, locFloor, currentFloor, floorData) {
     const officeId = OFFICE_IDS[currentFloor];
     return floorData.rooms.find(r => r.id === officeId) ?? null;
   }
-  if (locFloor && locFloor !== currentFloor) return null;
+  // locFloor는 0(지하)일 수 있어 falsy 체크(if(locFloor && ...))를 쓰면 안 됨
+  if (locFloor != null && locFloor !== currentFloor) return null;
   return floorData.rooms.find(r => r.id === roomId) ?? null;
 }
