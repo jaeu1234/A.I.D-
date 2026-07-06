@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>관리자 · 임시일정</title>
+  <style>
+    :root { --bg:#f4f5f8; --panel:#fff; --line:#e3e6ef; --text:#24272f; --muted:#8a90a0; --accent:#3b5bdb; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Malgun Gothic',sans-serif;
+      background:var(--bg); color:var(--text); }
+
+    /* 공통 네비 */
+    nav { display:flex; gap:4px; padding:10px 20px; background:var(--panel); border-bottom:1px solid var(--line); }
+    nav a { padding:6px 14px; font-size:14px; font-weight:600; color:var(--muted); text-decoration:none; border-radius:7px; }
+    nav a.active { background:var(--accent); color:#fff; }
+    nav a:hover:not(.active) { background:#f0f2f8; }
+
+    .wrap { max-width:900px; margin:0 auto; padding:24px 20px 60px; }
+    h1 { font-size:22px; margin-bottom:4px; }
+    .sub { color:var(--muted); font-size:13px; margin-bottom:24px; }
+
+    /* PIN 게이트 */
+    .gate { max-width:340px; margin:80px auto; background:var(--panel); border:1px solid var(--line);
+      border-radius:14px; padding:32px 28px; text-align:center; }
+    .gate h2 { font-size:18px; margin-bottom:6px; }
+    .gate p { color:var(--muted); font-size:13px; margin-bottom:18px; }
+    .gate input { width:100%; padding:11px; font-size:18px; text-align:center; letter-spacing:6px;
+      border:1px solid var(--line); border-radius:9px; outline:none; }
+    .gate input:focus { border-color:var(--accent); }
+    .gate button { width:100%; margin-top:14px; padding:11px; font-size:15px; font-weight:600;
+      background:var(--accent); color:#fff; border:none; border-radius:9px; cursor:pointer; }
+    .gate .err { color:#c0392b; font-size:13px; margin-top:10px; min-height:18px; }
+
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px; margin-bottom:20px; }
+    .card h3 { font-size:15px; margin-bottom:14px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+    label.f { display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--muted); font-weight:600; }
+    label.f select, label.f input { padding:9px 10px; font-size:14px; color:var(--text);
+      border:1px solid var(--line); border-radius:8px; outline:none; background:#fff; }
+    label.f select:focus, label.f input:focus { border-color:var(--accent); }
+    .save-btn { margin-top:14px; padding:10px 20px; font-size:14px; font-weight:600;
+      background:var(--accent); color:#fff; border:none; border-radius:9px; cursor:pointer; }
+
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th, td { padding:9px 8px; text-align:left; border-bottom:1px solid #f0f1f5; }
+    th { color:var(--muted); font-weight:600; font-size:12px; }
+    .del { padding:4px 10px; font-size:12px; color:#c0392b; background:#fdecea; border:none; border-radius:6px; cursor:pointer; }
+    .empty { color:var(--muted); font-size:13px; padding:16px 0; text-align:center; }
+
+    .summary-table td, .summary-table th { text-align:center; font-size:12px; padding:6px 4px; }
+    .summary-table td.on { background:#eef2ff; color:var(--accent); font-weight:600; border-radius:4px; }
+    .hidden { display:none; }
+    .warn { font-size:12px; color:#b8860b; background:#fff8e1; border:1px solid #f0e0a0;
+      border-radius:8px; padding:8px 12px; margin-bottom:16px; }
+  </style>
+</head>
+<body>
+  <!-- PIN 게이트 -->
+  <div class="gate" id="gate">
+    <h2>🔒 관리자 인증</h2>
+    <p>임시일정 관리는 PIN이 필요합니다.</p>
+    <input type="password" id="pin" inputmode="numeric" placeholder="••••" maxlength="8" autocomplete="off" />
+    <button id="pinBtn">입장</button>
+    <div class="err" id="pinErr"></div>
+  </div>
+
+  <!-- 관리 UI -->
+  <div id="app" class="hidden">
+    <nav>
+      <a href="index.html">📍 학생 화면</a>
+      <a href="admin.html" class="active">🔒 관리자</a>
+      <a href="upload.html">📷 시간표 업로드</a>
+    </nav>
+    <div class="wrap">
+      <h1>임시일정 관리</h1>
+      <div class="sub">특정 날짜·교시에 선생님의 위치를 일시적으로 변경합니다 (기본 시간표보다 우선 적용).</div>
+      <div class="warn">⚠️ 이 PIN은 클라이언트에 노출됩니다. 실운영 시 서버 인증으로 교체가 필요합니다.</div>
+
+      <!-- 등록 폼 -->
+      <div class="card">
+        <h3>임시일정 등록</h3>
+        <div class="grid">
+          <label class="f">선생님
+            <select id="fTeacher"></select>
+          </label>
+          <label class="f">날짜
+            <input type="date" id="fDate" />
+          </label>
+          <label class="f">교시
+            <select id="fPeriod"></select>
+          </label>
+          <label class="f">층
+            <select id="fFloor"></select>
+          </label>
+          <label class="f">방
+            <select id="fRoom"></select>
+          </label>
+          <label class="f">메모 (선택)
+            <input type="text" id="fNote" placeholder="예: 학부모 상담" />
+          </label>
+        </div>
+        <button class="save-btn" id="addBtn">＋ 등록</button>
+      </div>
+
+      <!-- 목록 -->
+      <div class="card">
+        <h3>등록된 임시일정</h3>
+        <table>
+          <thead><tr><th>날짜</th><th>선생님</th><th>교시</th><th>위치</th><th>메모</th><th></th></tr></thead>
+          <tbody id="ovBody"></tbody>
+        </table>
+        <div class="empty hidden" id="ovEmpty">등록된 임시일정이 없습니다.</div>
+      </div>
+
+      <!-- 시간표 요약 -->
+      <div class="card">
+        <h3>시간표 요약</h3>
+        <label class="f" style="max-width:200px; margin-bottom:14px;">선생님
+          <select id="sTeacher"></select>
+        </label>
+        <div style="overflow-x:auto;">
+          <table class="summary-table" id="summary"></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { TEACHERS, PERIODS, DAYS } from './src/data/schedule.js';
+    import { FLOORS, ADMIN_PIN } from './src/data/floors.js';
+    import { loadOverrides, saveOverrides, getEffectiveSchedule } from './src/lib/location.js';
+
+    const $ = (id) => document.getElementById(id);
+
+    // ── PIN 게이트 ──────────────────
+    function tryPin() {
+      if ($('pin').value === ADMIN_PIN) {
+        $('gate').classList.add('hidden');
+        $('app').classList.remove('hidden');
+        initApp();
+      } else {
+        $('pinErr').textContent = 'PIN이 올바르지 않습니다.';
+        $('pin').value = '';
+      }
+    }
+    $('pinBtn').onclick = tryPin;
+    $('pin').addEventListener('keydown', e => { if (e.key === 'Enter') tryPin(); });
+
+    // ── 앱 초기화 ──────────────────
+    function initApp() {
+      // 선생님 select 2곳
+      const tOpts = TEACHERS.map(t => `<option value="${t.id}">${t.name} (${t.subject})</option>`).join('');
+      $('fTeacher').innerHTML = tOpts;
+      $('sTeacher').innerHTML = tOpts;
+
+      // 교시 select
+      $('fPeriod').innerHTML = PERIODS.map((p, i) => `<option value="${i}">${p.label}</option>`).join('');
+
+      // 층 select (5층~지하)
+      $('fFloor').innerHTML = [5,4,3,2,1,0]
+        .map(f => `<option value="${f}">${FLOORS[f].label}</option>`).join('');
+      $('fFloor').addEventListener('change', fillRooms);
+      fillRooms();
+
+      // 오늘 날짜 기본값
+      $('fDate').value = new Date().toISOString().slice(0, 10);
+
+      $('addBtn').onclick = addOverride;
+      $('sTeacher').addEventListener('change', renderSummary);
+
+      renderOverrides();
+      renderSummary();
+    }
+
+    // 선택 층의 방 목록 (복도/화장실 제외하고 실제 위치 가능한 방 위주, 전부 포함)
+    function fillRooms() {
+      const floor = Number($('fFloor').value);
+      const rooms = FLOORS[floor].rooms.filter(r => r.type !== 'hall');
+      $('fRoom').innerHTML = rooms.map(r => `<option value="${r.id}">${r.label}</option>`).join('');
+    }
+
+    // ── 임시일정 등록 ──────────────
+    function addOverride() {
+      const floor = Number($('fFloor').value);
+      const roomId = $('fRoom').value;
+      const room = FLOORS[floor].rooms.find(r => r.id === roomId);
+      if (!room) return;
+
+      const ov = {
+        teacherId: $('fTeacher').value,
+        date: $('fDate').value,
+        periodIdx: Number($('fPeriod').value),
+        label: room.label,
+        room: room.id,
+        floor: floor,
+        note: $('fNote').value.trim(),
+      };
+      if (!ov.date) { alert('날짜를 선택하세요.'); return; }
+
+      const list = loadOverrides();
+      list.push(ov);
+      saveOverrides(list);
+      $('fNote').value = '';
+      renderOverrides();
+    }
+
+    // ── 목록 렌더 ──────────────────
+    function renderOverrides() {
+      const list = loadOverrides();
+      const body = $('ovBody');
+      $('ovEmpty').classList.toggle('hidden', list.length > 0);
+
+      body.innerHTML = list.map((o, i) => {
+        const t = TEACHERS.find(x => x.id === o.teacherId);
+        const pLabel = PERIODS[o.periodIdx]?.label ?? '-';
+        return `<tr>
+          <td>${o.date}</td>
+          <td>${t ? t.name : o.teacherId}</td>
+          <td>${pLabel}</td>
+          <td>${o.label}${o.floor != null ? ` <span style="color:#8a90a0">(${o.floor === 0 ? '지하' : o.floor + '층'})</span>` : ''}</td>
+          <td>${o.note || '-'}</td>
+          <td><button class="del" data-i="${i}">삭제</button></td>
+        </tr>`;
+      }).join('');
+
+      body.querySelectorAll('.del').forEach(btn => {
+        btn.onclick = () => {
+          const list = loadOverrides();
+          list.splice(Number(btn.dataset.i), 1);
+          saveOverrides(list);
+          renderOverrides();
+        };
+      });
+    }
+
+    // ── 시간표 요약 ────────────────
+    function renderSummary() {
+      const id = $('sTeacher').value;
+      const sched = getEffectiveSchedule(id);
+      const table = $('summary');
+      if (!sched) { table.innerHTML = '<tr><td>시간표 없음</td></tr>'; return; }
+
+      let head = '<tr><th>요일</th>' + PERIODS.map(p => `<th>${p.label}</th>`).join('') + '</tr>';
+      let rows = DAYS.map((day, d) => {
+        const cells = PERIODS.map((_, p) => {
+          const v = sched[d]?.[p];
+          return v ? `<td class="on">${v}</td>` : '<td>·</td>';
+        }).join('');
+        return `<tr><th>${day}</th>${cells}</tr>`;
+      }).join('');
+      table.innerHTML = head + rows;
+    }
+  </script>
+</body>
+</html>

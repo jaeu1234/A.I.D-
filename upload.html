@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>시간표 업로드 · AI 분석</title>
+  <style>
+    :root { --bg:#f4f5f8; --panel:#fff; --line:#e3e6ef; --text:#24272f; --muted:#8a90a0; --accent:#3b5bdb; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Malgun Gothic',sans-serif;
+      background:var(--bg); color:var(--text); }
+
+    nav { display:flex; gap:4px; padding:10px 20px; background:var(--panel); border-bottom:1px solid var(--line); }
+    nav a { padding:6px 14px; font-size:14px; font-weight:600; color:var(--muted); text-decoration:none; border-radius:7px; }
+    nav a.active { background:var(--accent); color:#fff; }
+    nav a:hover:not(.active) { background:#f0f2f8; }
+
+    .wrap { max-width:900px; margin:0 auto; padding:24px 20px 60px; }
+    h1 { font-size:22px; margin-bottom:4px; }
+    .sub { color:var(--muted); font-size:13px; margin-bottom:20px; }
+
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px; margin-bottom:20px; }
+    .card h3 { font-size:15px; margin-bottom:14px; }
+    .card h3 .step { display:inline-block; width:22px; height:22px; line-height:22px; text-align:center;
+      background:var(--accent); color:#fff; border-radius:50%; font-size:12px; margin-right:8px; }
+
+    label.f { display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--muted); font-weight:600; margin-bottom:12px; }
+    label.f select, label.f input { padding:9px 10px; font-size:14px; color:var(--text);
+      border:1px solid var(--line); border-radius:8px; outline:none; background:#fff; }
+    label.f select:focus, label.f input:focus { border-color:var(--accent); }
+
+    .row { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+    .btn { padding:10px 20px; font-size:14px; font-weight:600; background:var(--accent); color:#fff;
+      border:none; border-radius:9px; cursor:pointer; }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    .btn-ghost { background:#eef1f8; color:var(--text); }
+
+    .warn { font-size:12px; color:#b8860b; background:#fff8e1; border:1px solid #f0e0a0;
+      border-radius:8px; padding:8px 12px; margin-top:10px; }
+    .status { font-size:13px; margin-top:10px; min-height:18px; }
+    .status.err { color:#c0392b; }
+    .status.ok { color:#2d7a4f; }
+
+    .preview { max-width:100%; max-height:280px; border-radius:10px; border:1px solid var(--line); margin-top:12px; display:none; }
+
+    table.edit { width:100%; border-collapse:collapse; font-size:12px; }
+    table.edit th, table.edit td { border:1px solid var(--line); padding:2px; text-align:center; }
+    table.edit th { background:#f7f8fc; color:var(--muted); font-weight:600; padding:6px 4px; }
+    table.edit input { width:100%; min-width:56px; border:none; text-align:center; font-size:12px; padding:5px 2px; outline:none; background:transparent; }
+    table.edit input:focus { background:#eef2ff; }
+    .hidden { display:none; }
+    .hint { color:var(--muted); font-size:12px; margin-bottom:10px; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="index.html">📍 학생 화면</a>
+    <a href="admin.html">🔒 관리자</a>
+    <a href="upload.html" class="active">📷 시간표 업로드</a>
+  </nav>
+
+  <div class="wrap">
+    <h1>시간표 사진 AI 분석</h1>
+    <div class="sub">시간표 사진을 올리면 Claude가 읽어 표로 변환합니다. 확인·수정 후 저장하세요.</div>
+
+    <!-- 1. API 키 -->
+    <div class="card">
+      <h3><span class="step">1</span>Anthropic API 키</h3>
+      <label class="f">API 키 (sk-ant-...)
+        <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" />
+      </label>
+      <button class="btn btn-ghost" id="saveKey">키 저장</button>
+      <div class="warn">⚠️ 키는 이 브라우저(localStorage)에 저장되고 API 호출 시 노출됩니다.
+        실운영에서는 서버 프록시를 통해 호출해야 합니다.</div>
+    </div>
+
+    <!-- 2. 선생님 + 사진 -->
+    <div class="card">
+      <h3><span class="step">2</span>선생님 선택 · 사진 업로드</h3>
+      <div class="row">
+        <label class="f" style="flex:1; min-width:180px;">선생님
+          <select id="teacher"></select>
+        </label>
+        <label class="f" style="flex:2; min-width:200px;">시간표 사진
+          <input type="file" id="file" accept="image/*" />
+        </label>
+      </div>
+      <img id="preview" class="preview" alt="미리보기" />
+      <div class="row" style="margin-top:14px;">
+        <button class="btn" id="analyze" disabled>🔍 AI 분석 시작</button>
+      </div>
+      <div class="status" id="status"></div>
+    </div>
+
+    <!-- 3. 결과 편집 -->
+    <div class="card hidden" id="resultCard">
+      <h3><span class="step">3</span>결과 확인 · 수정</h3>
+      <div class="hint">셀 형식: <b>과목(학년-반)</b> 예: 수학(2-1). 빈 시간은 비워두세요. 점심 열은 보통 빈칸입니다.</div>
+      <div style="overflow-x:auto;">
+        <table class="edit" id="editTable"></table>
+      </div>
+      <div class="row" style="margin-top:16px;">
+        <button class="btn" id="save">💾 이 선생님 시간표로 저장</button>
+      </div>
+      <div class="status" id="saveStatus"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { TEACHERS, PERIODS, DAYS } from './src/data/schedule.js';
+    import { saveAiSchedule } from './src/lib/location.js';
+
+    const $ = (id) => document.getElementById(id);
+    const MODEL = 'claude-sonnet-5';
+    const KEY_LS = 'anthropic_api_key';
+
+    let imageB64 = null, imageMime = null, parsed = null;
+
+    // ── 선생님 select ──────────────
+    $('teacher').innerHTML = TEACHERS
+      .map(t => `<option value="${t.id}">${t.name} (${t.subject})</option>`).join('');
+
+    // ── API 키 ─────────────────────
+    $('apiKey').value = localStorage.getItem(KEY_LS) || '';
+    $('saveKey').onclick = () => {
+      localStorage.setItem(KEY_LS, $('apiKey').value.trim());
+      setStatus('status', 'ok', '키를 저장했습니다.');
+    };
+
+    // ── 파일 → base64 ──────────────
+    $('file').addEventListener('change', e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      imageMime = f.type || 'image/jpeg';
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result;             // "data:image/...;base64,XXXX"
+        imageB64 = dataUrl.split(',')[1];
+        $('preview').src = dataUrl;
+        $('preview').style.display = 'block';
+        $('analyze').disabled = false;
+      };
+      reader.readAsDataURL(f);
+    });
+
+    // ── AI 분석 ────────────────────
+    $('analyze').onclick = analyze;
+
+    async function analyze() {
+      const key = ($('apiKey').value || localStorage.getItem(KEY_LS) || '').trim();
+      if (!key) { setStatus('status', 'err', 'API 키를 먼저 입력·저장하세요.'); return; }
+      if (!imageB64) { setStatus('status', 'err', '사진을 먼저 업로드하세요.'); return; }
+
+      $('analyze').disabled = true;
+      setStatus('status', '', '분석 중… (수 초 소요)');
+
+      const instruction =
+        '이 이미지는 한 선생님의 주간 시간표입니다. 내용을 읽어 2차원 배열 schedule로 변환하세요. ' +
+        'schedule[요일][교시] 구조이며 요일 인덱스는 0=월,1=화,2=수,3=목,4=금 (총 5개), ' +
+        '교시 인덱스는 0~7 (1교시,2교시,3교시,4교시,점심,5교시,6교시,7교시 순, 총 8개)입니다. ' +
+        '각 칸의 값은 "과목(학년-반)" 형식 문자열(예: "수학(2-1)")로, 수업이 없으면 null로 채우세요. ' +
+        '점심 열(인덱스 4)은 일반적으로 null입니다. 읽을 수 없는 칸은 null로 두세요.';
+
+      // 5×8 배열 형태를 강제하는 json_schema
+      const schema = {
+        type: 'object',
+        additionalProperties: false,
+        required: ['schedule'],
+        properties: {
+          schedule: {
+            type: 'array',
+            items: {
+              type: 'array',
+              items: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+            },
+          },
+        },
+      };
+
+      const body = {
+        model: MODEL,
+        max_tokens: 4096,
+        output_config: { format: { type: 'json_schema', schema } },
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: imageMime, data: imageB64 } },
+            { type: 'text', text: instruction },
+          ],
+        }],
+      };
+
+      try {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': key,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json',
+            'anthropic-dangerous-direct-browser-access': 'true',
+          },
+          body: JSON.stringify(body),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          const msg = data?.error?.message || `HTTP ${res.status}`;
+          setStatus('status', 'err', `분석 실패: ${msg}`);
+          $('analyze').disabled = false;
+          return;
+        }
+
+        const textBlock = (data.content || []).find(b => b.type === 'text');
+        if (!textBlock) { setStatus('status', 'err', '응답에서 결과를 찾지 못했습니다.'); $('analyze').disabled = false; return; }
+
+        let result;
+        try { result = JSON.parse(textBlock.text); }
+        catch { setStatus('status', 'err', '결과 JSON 파싱 실패. 다시 시도하세요.'); $('analyze').disabled = false; return; }
+
+        parsed = normalize(result.schedule);
+        renderEditTable(parsed);
+        $('resultCard').classList.remove('hidden');
+        setStatus('status', 'ok', '분석 완료. 아래에서 확인·수정하세요.');
+        $('analyze').disabled = false;
+      } catch (err) {
+        setStatus('status', 'err', `네트워크 오류: ${err.message}`);
+        $('analyze').disabled = false;
+      }
+    }
+
+    // schedule을 5×8로 정규화 (부족/초과 보정)
+    function normalize(sched) {
+      const out = [];
+      for (let d = 0; d < 5; d++) {
+        const row = Array.isArray(sched?.[d]) ? sched[d] : [];
+        const fixed = [];
+        for (let p = 0; p < PERIODS.length; p++) {
+          const v = row[p];
+          fixed.push(typeof v === 'string' && v.trim() ? v.trim() : null);
+        }
+        out.push(fixed);
+      }
+      return out;
+    }
+
+    // ── 편집 표 렌더 ───────────────
+    function renderEditTable(sched) {
+      const table = $('editTable');
+      let head = '<tr><th>요일</th>' + PERIODS.map(p => `<th>${p.label}</th>`).join('') + '</tr>';
+      let rows = DAYS.map((day, d) => {
+        const cells = PERIODS.map((_, p) => {
+          const v = sched[d][p] ?? '';
+          return `<td><input data-d="${d}" data-p="${p}" value="${v.replace(/"/g, '&quot;')}" /></td>`;
+        }).join('');
+        return `<tr><th>${day}</th>${cells}</tr>`;
+      }).join('');
+      table.innerHTML = head + rows;
+    }
+
+    // 편집 표 → 배열
+    function collectTable() {
+      const out = Array.from({ length: 5 }, () => Array(PERIODS.length).fill(null));
+      $('editTable').querySelectorAll('input').forEach(inp => {
+        const d = Number(inp.dataset.d), p = Number(inp.dataset.p);
+        const v = inp.value.trim();
+        out[d][p] = v ? v : null;
+      });
+      return out;
+    }
+
+    // ── 저장 ───────────────────────
+    $('save').onclick = () => {
+      const schedule = collectTable();
+      const id = $('teacher').value;
+      saveAiSchedule(id, schedule);
+      const t = TEACHERS.find(x => x.id === id);
+      setStatus('saveStatus', 'ok', `${t ? t.name : id} 선생님 시간표를 저장했습니다. 학생 화면에 반영됩니다.`);
+    };
+
+    // ── 유틸 ───────────────────────
+    function setStatus(id, cls, msg) {
+      const el = $(id);
+      el.className = 'status' + (cls ? ' ' + cls : '');
+      el.textContent = msg;
+    }
+  </script>
+</body>
+</html>

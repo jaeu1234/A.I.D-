@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>선생님 위치 안내</title>
+  <style>
+    :root {
+      --bg: #f4f5f8;
+      --panel: #ffffff;
+      --line: #e3e6ef;
+      --text: #24272f;
+      --muted: #8a90a0;
+      --accent: #3b5bdb;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Malgun Gothic', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── 헤더 ───────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 20px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 18px; font-weight: 700; white-space: nowrap; }
+    header .clock { font-size: 13px; color: var(--muted); white-space: nowrap; }
+    .topnav { display: flex; gap: 4px; }
+    .topnav a { padding: 5px 12px; font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; border-radius: 7px; }
+    .topnav a.active { background: var(--accent); color: #fff; }
+    .topnav a:hover:not(.active) { background: #f0f2f8; }
+    header .period-badge { margin-left: auto; }
+    header .period-badge {
+      font-size: 12px; font-weight: 600; color: var(--accent);
+      background: #eef2ff; padding: 4px 10px; border-radius: 20px; white-space: nowrap;
+    }
+
+    /* ── 본문 레이아웃 ───────────────── */
+    .layout { flex: 1; display: flex; min-height: 0; }
+
+    /* 좌측 선생님 목록 */
+    .sidebar {
+      width: 240px; flex-shrink: 0;
+      background: var(--panel);
+      border-right: 1px solid var(--line);
+      display: flex; flex-direction: column;
+    }
+    .search-box { padding: 12px; border-bottom: 1px solid var(--line); }
+    .search-box input {
+      width: 100%; padding: 9px 12px; font-size: 14px;
+      border: 1px solid var(--line); border-radius: 8px; outline: none;
+    }
+    .search-box input:focus { border-color: var(--accent); }
+    .teacher-list { overflow-y: auto; flex: 1; }
+    .teacher-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 11px 14px; cursor: pointer; border-bottom: 1px solid #f2f3f7;
+    }
+    .teacher-item:hover { background: #f7f8fc; }
+    .teacher-item.active { background: #eef2ff; }
+    .teacher-dot { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+      color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    .teacher-meta { min-width: 0; }
+    .teacher-meta .name { font-size: 14px; font-weight: 600; }
+    .teacher-meta .sub { font-size: 11px; color: var(--muted); }
+
+    /* 중앙 지도 */
+    .map-area { flex: 1; position: relative; display: flex; flex-direction: column; min-width: 0; }
+    .floor-tabs {
+      display: flex; gap: 6px; padding: 10px 14px;
+      background: var(--panel); border-bottom: 1px solid var(--line); flex-shrink: 0;
+    }
+    .floor-tabs button {
+      padding: 6px 13px; font-size: 13px; font-weight: 600;
+      border: 1px solid var(--line); background: #fff; border-radius: 7px; cursor: pointer; color: var(--muted);
+    }
+    .floor-tabs button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .canvas-wrap { flex: 1; position: relative; overflow: hidden; background: #eceef4; }
+    #map { display: block; touch-action: none; }
+    .zoom-ctrl { position: absolute; right: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 6px; }
+    .zoom-ctrl button {
+      width: 38px; height: 38px; font-size: 18px; font-weight: 700;
+      background: #fff; border: 1px solid var(--line); border-radius: 9px; cursor: pointer; color: var(--text);
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }
+
+    /* 우측 정보 패널 */
+    .info-panel {
+      width: 300px; flex-shrink: 0;
+      background: var(--panel); border-left: 1px solid var(--line);
+      display: flex; flex-direction: column; overflow-y: auto;
+    }
+    .info-empty { padding: 40px 20px; text-align: center; color: var(--muted); font-size: 14px; }
+    .info-head { padding: 18px 18px 14px; border-bottom: 1px solid var(--line); }
+    .info-head .name { font-size: 20px; font-weight: 700; }
+    .info-head .subject { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .now-card {
+      margin: 14px 18px; padding: 14px; border-radius: 12px;
+      background: #eef2ff; border: 1px solid #dbe2fb;
+    }
+    .now-card .lbl { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: .04em; }
+    .now-card .loc { font-size: 18px; font-weight: 700; margin-top: 4px; }
+    .now-card .next { font-size: 13px; color: #555; margin-top: 8px; }
+    .now-card .note { font-size: 12px; color: #c0501a; margin-top: 6px; }
+    .timeline { padding: 4px 18px 24px; }
+    .timeline h3 { font-size: 13px; color: var(--muted); margin: 12px 0 8px; }
+    .tl-row {
+      display: flex; align-items: center; gap: 10px; padding: 7px 0;
+      border-bottom: 1px solid #f2f3f7; font-size: 13px;
+    }
+    .tl-time { width: 48px; flex-shrink: 0; color: var(--muted); font-size: 12px; }
+    .tl-period { width: 42px; flex-shrink: 0; font-weight: 600; }
+    .tl-loc { flex: 1; }
+    .tl-row.now { background: #fffbe6; margin: 0 -8px; padding: 7px 8px; border-radius: 6px; font-weight: 600; }
+    .tl-row.next .tl-loc { color: var(--accent); font-weight: 600; }
+    .tl-row.past { opacity: .5; }
+    .status-pill { font-size: 10px; padding: 2px 7px; border-radius: 10px; margin-left: 6px; }
+    .pill-now { background: #ffe58f; color: #7a5a00; }
+    .pill-next { background: #d6e0ff; color: var(--accent); }
+
+    @media (max-width: 860px) {
+      .sidebar { display: none; }
+      .info-panel { width: 260px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📍 선생님 위치 안내</h1>
+    <nav class="topnav">
+      <a href="index.html" class="active">학생</a>
+      <a href="admin.html">관리자</a>
+      <a href="upload.html">업로드</a>
+    </nav>
+    <span class="period-badge" id="periodBadge">—</span>
+    <span class="clock" id="clock">--:--</span>
+  </header>
+
+  <div class="layout">
+    <!-- 좌측: 선생님 목록 -->
+    <aside class="sidebar">
+      <div class="search-box">
+        <input type="text" id="search" placeholder="선생님 이름 · 과목 검색" autocomplete="off" />
+      </div>
+      <div class="teacher-list" id="teacherList"></div>
+    </aside>
+
+    <!-- 중앙: 지도 -->
+    <div class="map-area">
+      <div class="floor-tabs" id="floorTabs"></div>
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="map"></canvas>
+        <div class="zoom-ctrl">
+          <button id="zoomIn">＋</button>
+          <button id="zoomOut">－</button>
+          <button id="zoomReset" title="전체 보기">⤢</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 우측: 정보 패널 -->
+    <aside class="info-panel" id="infoPanel">
+      <div class="info-empty">선생님을 선택하면<br>현재 위치와 동선이 표시됩니다.</div>
+    </aside>
+  </div>
+
+  <script type="module">
+    import { PERIODS, DAYS, TEACHERS } from './src/data/schedule.js';
+    import { FLOORS } from './src/data/floors.js';
+    import {
+      getCurrentPeriodIndex, getTodayIndex,
+    } from './src/lib/time.js';
+    import {
+      getTeacherLocation, buildTimeline, getNextMove, resolveRoom,
+    } from './src/lib/location.js';
+    import {
+      initCanvas, render, resetZoom, setFloorAndReset,
+      zoom, pan, zoomToRoom, hitTestPin, setSelectedId, getCamera,
+    } from './src/lib/map.js';
+
+    // ── 상태 ──────────────────────────
+    let selectedId = null;
+    let currentFloor = 1;
+
+    const $ = (id) => document.getElementById(id);
+    const canvas = $('map');
+
+    // ── 초기화 ────────────────────────
+    initCanvas(canvas);
+    buildFloorTabs();
+    buildTeacherList();
+    switchFloor(1);
+    updateClock();
+
+    // 1분마다 시각·위치 갱신
+    setInterval(() => { updateClock(); render(); if (selectedId) renderInfo(); }, 30000);
+    // 창 크기 변화 대응
+    window.addEventListener('resize', () => resetZoom());
+
+    // ── 층 탭 ─────────────────────────
+    function buildFloorTabs() {
+      const tabs = $('floorTabs');
+      // 5층 → 지하 순으로
+      [5, 4, 3, 2, 1, 0].forEach(f => {
+        const b = document.createElement('button');
+        b.textContent = FLOORS[f].label;
+        b.dataset.floor = f;
+        b.onclick = () => switchFloor(f);
+        tabs.appendChild(b);
+      });
+    }
+
+    function switchFloor(f) {
+      currentFloor = f;
+      setFloorAndReset(f);
+      [...$('floorTabs').children].forEach(b =>
+        b.classList.toggle('active', Number(b.dataset.floor) === f));
+    }
+
+    // ── 선생님 목록 ───────────────────
+    function buildTeacherList(filter = '') {
+      const list = $('teacherList');
+      list.innerHTML = '';
+      const q = filter.trim().toLowerCase();
+      TEACHERS
+        .filter(t => !q || t.name.toLowerCase().includes(q) || t.subject.toLowerCase().includes(q))
+        .forEach(t => {
+          const div = document.createElement('div');
+          div.className = 'teacher-item' + (t.id === selectedId ? ' active' : '');
+          div.onclick = () => selectTeacher(t.id);
+          div.innerHTML = `
+            <div class="teacher-dot" style="background:${t.color}">${t.id}</div>
+            <div class="teacher-meta">
+              <div class="name">${t.name}</div>
+              <div class="sub">${t.subject}</div>
+            </div>`;
+          list.appendChild(div);
+        });
+    }
+
+    $('search').addEventListener('input', e => buildTeacherList(e.target.value));
+
+    // ── 선생님 선택 ───────────────────
+    function selectTeacher(id) {
+      selectedId = id;
+      setSelectedId(id);
+      buildTeacherList($('search').value);
+
+      // 현재 위치가 있는 층으로 이동 후 해당 방으로 줌
+      const day = getTodayIndex();
+      const pi  = getCurrentPeriodIndex();
+      const loc = getTeacherLocation(id, day, pi);
+      const targetFloor = loc.floor ?? officeFloorFor(loc, currentFloor);
+
+      if (FLOORS[targetFloor]) switchFloor(targetFloor);
+      const room = resolveRoom(loc.room, loc.floor, currentFloor, FLOORS[currentFloor]);
+      if (room) zoomToRoom(room);
+      else render();
+
+      renderInfo();
+    }
+
+    // 교무실 위치는 층이 없으니 현재 층 교무실을 사용
+    function officeFloorFor(loc, cur) {
+      return (loc.room === 'office') ? cur : cur;
+    }
+
+    // ── 정보 패널 렌더 ────────────────
+    function renderInfo() {
+      const panel = $('infoPanel');
+      const t = TEACHERS.find(x => x.id === selectedId);
+      if (!t) { panel.innerHTML = '<div class="info-empty">선생님을 선택하면<br>현재 위치와 동선이 표시됩니다.</div>'; return; }
+
+      const day = getTodayIndex();
+      const pi  = getCurrentPeriodIndex();
+      const cur = getTeacherLocation(t.id, day, pi);
+      const move = getNextMove(t.id);
+      const timeline = buildTimeline(t.id);
+
+      let nextHtml = '';
+      if (move && move.toLoc) {
+        const verb = move.isMovingNow ? '이동 중 →' : '다음';
+        nextHtml = `<div class="next">${verb} <b>${move.toPeriod.label}</b> · ${move.toLoc.label}</div>`;
+      }
+      const noteHtml = cur.note ? `<div class="note">📌 ${cur.note}</div>` : '';
+
+      const rows = timeline.map(({ pi, period, loc, status }) => {
+        let pill = '';
+        if (status === 'now')  pill = '<span class="status-pill pill-now">현재</span>';
+        if (status === 'next') pill = '<span class="status-pill pill-next">다음</span>';
+        return `
+          <div class="tl-row ${status}">
+            <span class="tl-time">${period.start}</span>
+            <span class="tl-period">${period.label}</span>
+            <span class="tl-loc">${loc.label}${pill}</span>
+          </div>`;
+      }).join('');
+
+      panel.innerHTML = `
+        <div class="info-head">
+          <div class="name">${t.name} <span style="font-size:14px;color:${t.color}">●</span></div>
+          <div class="subject">${t.subject} 선생님</div>
+        </div>
+        <div class="now-card">
+          <div class="lbl">지금 위치</div>
+          <div class="loc">${cur.label}</div>
+          ${nextHtml}
+          ${noteHtml}
+        </div>
+        <div class="timeline">
+          <h3>${DAYS[day]}요일 동선</h3>
+          ${rows}
+        </div>`;
+    }
+
+    // ── 시계 · 교시 뱃지 ──────────────
+    function updateClock() {
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      $('clock').textContent = `${DAYS[getTodayIndex()]}요일 ${hh}:${mm}`;
+      const pi = getCurrentPeriodIndex();
+      $('periodBadge').textContent = pi >= 0 ? PERIODS[pi].label : '쉬는 시간';
+    }
+
+    // ── 캔버스 인터랙션 ───────────────
+    // 휠 줌
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      zoom(factor, e.clientX - rect.left, e.clientY - rect.top);
+    }, { passive: false });
+
+    // 드래그 패닝 & 클릭 판정
+    let dragging = false, moved = false, lastX = 0, lastY = 0;
+    canvas.addEventListener('pointerdown', e => {
+      dragging = true; moved = false; lastX = e.clientX; lastY = e.clientY;
+      canvas.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener('pointermove', e => {
+      if (!dragging) return;
+      const dx = e.clientX - lastX, dy = e.clientY - lastY;
+      if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+      pan(dx, dy);
+      lastX = e.clientX; lastY = e.clientY;
+    });
+    canvas.addEventListener('pointerup', e => {
+      dragging = false;
+      if (!moved) {
+        const rect = canvas.getBoundingClientRect();
+        const id = hitTestPin(e.clientX - rect.left, e.clientY - rect.top);
+        if (id) selectTeacher(id);
+      }
+    });
+
+    // 줌 버튼
+    $('zoomIn').onclick  = () => zoom(1.3);
+    $('zoomOut').onclick = () => zoom(1 / 1.3);
+    $('zoomReset').onclick = () => resetZoom();
+  </script>
+</body>
+</html>
