@@ -202,5 +202,24 @@ export function findRoomFloor(roomId) {
   return null;
 }
 
+/**
+ * 모든 층에서 교실(type: 'class') room만 추출해 학년-반 오름차순으로 정렬한 목록 반환.
+ * 학급(반) 시간표 검색 화면에서 반 목록을 만드는 데 사용한다.
+ * @returns {Array<{id:string, grade:number, classNum:number, floor:number, label:string}>}
+ */
+export function getAllClassrooms() {
+  const list = [];
+  Object.entries(FLOORS).forEach(([floorNum, floor]) => {
+    floor.rooms.forEach(r => {
+      if (r.type !== 'class') return;
+      const m = r.id.match(/^(\d+)-(\d+)$/);
+      if (!m) return;
+      list.push({ id: r.id, grade: Number(m[1]), classNum: Number(m[2]), floor: Number(floorNum), label: r.label });
+    });
+  });
+  list.sort((a, b) => a.grade - b.grade || a.classNum - b.classNum);
+  return list;
+}
+
 // 관리자 PIN
 export const ADMIN_PIN = '5609';

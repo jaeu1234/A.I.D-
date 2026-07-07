@@ -58,7 +58,9 @@ export function getBreakAfterIndex() {
  * 위치를 미리 보여주기 위함. 주말 여부 자체는 isWeekend()로 별도 확인한다.
  */
 export function getTodayIndex() {
-  return Math.min(Math.max(new Date().getDay() - 1, 0), 4);
+  const day = new Date().getDay(); // 0=일 ~ 6=토
+  if (day === 0 || day === 6) return 0; // 주말은 월요일(0) 시간표로 고정
+  return day - 1;
 }
 
 /**
@@ -68,4 +70,19 @@ export function getTodayIndex() {
 export function isWeekend() {
   const day = new Date().getDay();
   return day === 0 || day === 6;
+}
+
+/**
+ * 로컬 타임존 기준 'YYYY-MM-DD' 문자열 반환.
+ * 주의: `Date.prototype.toISOString()`은 UTC 기준이라 한국(UTC+9)에서는
+ * 00:00~09:00 사이에 하루 전 날짜가 나온다 — 등교 시간(1교시 08:30)과 정확히 겹치므로
+ * 임시일정의 "오늘" 판정에는 반드시 이 함수를 써야 한다.
+ * @param {Date} [d]
+ * @returns {string}
+ */
+export function getLocalDateStr(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }

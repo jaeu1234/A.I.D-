@@ -54,7 +54,16 @@ export function s2w(sx, sy) {
 /** 평면도 전체가 화면에 꽉 차도록 카메라 리셋 */
 export function resetZoom() {
   const floor = FLOORS[_currentFloor];
-  if (!floor || _CW < 10 || _CH < 10) return;
+  if (!floor || !_canvas) return;
+  // 주의: _CW/_CH는 render()가 실행돼야만 채워지는 값이라, 최초 로드 시(아직 한 번도
+  // render()가 호출되기 전)에는 항상 0이다. 그 상태에서 이 값만 보고 판단하면
+  // 페이지가 열려도 지도가 영원히 렌더되지 않는 버그가 생긴다 — 여기서 직접
+  // wrap 크기를 새로 측정해야 최초 로드 시에도 정상적으로 화면이 그려진다.
+  const wrap = _canvas.parentElement;
+  const rect = wrap.getBoundingClientRect();
+  if (rect.width < 10 || rect.height < 10) return;
+  _CW = rect.width;
+  _CH = rect.height;
   const PAD = 40;
   _camZ = Math.min((_CW - PAD * 2) / floor.W, (_CH - PAD * 2) / floor.H);
   _camX = floor.W / 2;
@@ -203,7 +212,10 @@ function _drawTeacherRoute(ctx, teacherId) {
   const breakAf = getBreakAfterIndex();
 
   // 현재 위치
-  const curLocPi  = pi >= 0 ? pi : (breakAf >= 0 ? breakAf : 0);
+  // 등교 전·하교 후(pi<0 이고 쉬는 시간도 아님)에는 표시할 "현재 교시"가 없으므로
+  // -1을 그대로 넘겨 room:null을 받는다. 과거에는 0(1교시)으로 고정 대체해
+  // 하교 후에도 1교시 위치가 잘못 강조 표시되는 버그가 있었다.
+  const curLocPi  = pi >= 0 ? pi : (breakAf >= 0 ? breakAf : -1);
   const curLoc    = getTeacherLocation(teacherId, day, curLocPi);
   const curRoom   = resolveRoom(curLoc.room, curLoc.floor, _currentFloor, floor);
 

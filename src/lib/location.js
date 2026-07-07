@@ -1,6 +1,9 @@
 import { PERIODS, TEACHERS, buildSchedule } from '../data/schedule.js';
 import { OFFICE_IDS, findRoomFloor } from '../data/floors.js';
-import { getCurrentPeriodIndex, getNextPeriodIndex, getBreakAfterIndex, getTodayIndex } from './time.js';
+import {
+  getCurrentPeriodIndex, getNextPeriodIndex, getBreakAfterIndex, getTodayIndex,
+  getLocalDateStr, getNowMins, toMins,
+} from './time.js';
 
 // ─────────────────────────────────────────────
 // localStorage 헬퍼
@@ -80,7 +83,9 @@ export function getTeacherLocation(teacherId, dayIdx, periodIdx) {
   }
 
   // 임시 일정 확인 (오늘 날짜 기준)
-  const today     = new Date().toISOString().slice(0, 10);
+  // 주의: toISOString()은 UTC 기준이라 한국 시간 00:00~09:00에는 하루 전 날짜가 되어
+  // 등교 시간대(1교시 08:30~)에 "오늘" 임시일정이 매칭되지 않는 버그가 있었다 → 로컬 날짜 사용.
+  const today     = getLocalDateStr();
   const overrides = loadOverrides();
   const override  = overrides.find(
     o => o.teacherId === teacherId && o.date === today && o.periodIdx === periodIdx,
@@ -116,6 +121,38 @@ export function getTeacherLocation(teacherId, dayIdx, periodIdx) {
 }
 
 // ─────────────────────────────────────────────
+// 학급(반) 시간표
+// ─────────────────────────────────────────────
+
+/**
+ * 특정 학급(학년-반)의 주간 시간표를 모든 선생님의 시간표에서 조합해 반환.
+ * 개별 선생님 시간표에 그 반을 가르치는 칸이 흩어져 있으므로, 전체 선생님을 훑어서
+ * grade/class가 일치하는 칸을 모아 하나의 학급 시간표로 재구성한다.
+ * 담당 선생님 정보가 없는 시간(자율학습·동아리 등)은 원본 데이터에 아예 없으므로
+ * 빈 칸(null)으로 남는다 — 다른 반 시간표가 추가로 입력되면 자동으로 채워진다.
+ * 날짜별 임시일정(override)은 반영하지 않는다(그 날 하루만 유효한 정보라 주간 시간표에 안 맞음).
+ *
+ * @param {number} grade
+ * @param {number} classNum
+ * @returns {Array<Array<{subject:string, teacherName:string, teacherId:string, label:string}|null>>} 5×8 그리드
+ */
+export function getClassSchedule(grade, classNum) {
+  const grid = Array.from({ length: 5 }, () => Array(PERIODS.length).fill(null));
+  TEACHERS.forEach(t => {
+    const sched = getEffectiveSchedule(t.id);
+    if (!sched) return;
+    sched.forEach((row, d) => {
+      row.forEach((cell, p) => {
+        if (cell && cell.grade === grade && cell.class === classNum) {
+          grid[d][p] = { subject: cell.subject, teacherName: t.name, teacherId: t.id, label: cell.label };
+        }
+      });
+    });
+  });
+  return grid;
+}
+
+// ─────────────────────────────────────────────
 // 오늘 전체 동선 타임라인
 // ─────────────────────────────────────────────
 
@@ -128,11 +165,15 @@ export function buildTimeline(teacherId) {
   const day      = getTodayIndex();
   const piNow    = getCurrentPeriodIndex();
   const breakAfter = getBreakAfterIndex();
+  const nowMins  = getNowMins();
 
   return PERIODS.map((period, pi) => {
     const loc = getTeacherLocation(teacherId, day, pi);
     let status = 'future';
-    if (pi < piNow)                        status = 'past';
+    // 종료 시각 기준으로 판정해야 쉬는 시간(piNow=-1)에도 이미 끝난 교시가
+    // 올바르게 '지난 교시'로 표시된다. piNow만 비교하면 쉬는 시간 동안
+    // 이전 교시들이 전부 '미래'로 잘못 표시되는 버그가 있었다.
+    if (nowMins >= toMins(period.end))     status = 'past';
     else if (pi === piNow)                 status = 'now';
     else if (breakAfter >= 0 && pi === breakAfter + 1) status = 'next';
     return { pi, period, loc, status };

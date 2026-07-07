@@ -130,6 +130,7 @@
     import { TEACHERS, PERIODS, DAYS } from './src/data/schedule.js';
     import { FLOORS, ADMIN_PIN } from './src/data/floors.js';
     import { loadOverrides, saveOverrides, getEffectiveSchedule } from './src/lib/location.js';
+    import { getLocalDateStr } from './src/lib/time.js';
 
     const $ = (id) => document.getElementById(id);
 
@@ -173,8 +174,8 @@
       $('fFloor').addEventListener('change', fillRooms);
       fillRooms();
 
-      // 오늘 날짜 기본값
-      $('fDate').value = new Date().toISOString().slice(0, 10);
+      // 오늘 날짜 기본값 (UTC 기준 toISOString은 자정~오전9시 사이 하루 전 날짜가 되므로 로컬 날짜 사용)
+      $('fDate').value = getLocalDateStr();
 
       $('addBtn').onclick = addOverride;
       $('sTeacher').addEventListener('change', renderSummary);
