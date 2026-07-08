@@ -64,7 +64,7 @@ const SUBJECT_ROOMS = {
   미술: { room: 'art-room2a',    label: '미술교과실' },
   실험: { room: 'bio-lab',       label: '생명과학실' }, // 통과(이론)는 교실 유지
   정보: { room: 'computer-room', label: '컴퓨터실' },   // 기본(강혜영 등)
-  체육: { room: null,            label: '체육관' },     // 운동장 옆 별도 건물, 지도 핀 없음
+  체육: { room: 'gymnasium',     label: '체육관' },     // 운동장 동쪽 1층 단층 건물(floors.js 1층)
 };
 
 // 같은 과목이라도 교사마다 쓰는 방이 다른 경우의 override (id = schedule.js 기준).
