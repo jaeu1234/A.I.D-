@@ -60,7 +60,7 @@ export function getEffectiveSchedule(teacherId) {
 // 건물)라 라벨만 표시하고 지도 핀은 찍지 않는다.
 // ─────────────────────────────────────────────
 const SUBJECT_ROOMS = {
-  음악: { room: 'music2',        label: '음악실2' },   // 1학년용(복도 오른쪽)
+  음악: { room: 'music1',        label: '음악실1' },   // 1학년용(악기창고1 쪽)
   미술: { room: 'art-room2a',    label: '미술교과실' },
   실험: { room: 'bio-lab',       label: '생명과학실' }, // 통과(이론)는 교실 유지
   정보: { room: 'computer-room', label: '컴퓨터실' },   // 기본(강혜영 등)
