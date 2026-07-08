@@ -4,33 +4,25 @@ import {
   getCurrentPeriodIndex, getNextPeriodIndex, getBreakAfterIndex, getTodayIndex,
   getLocalDateStr, getNowMins, toMins,
 } from './time.js';
+import { getOverridesCache, getAiSchedulesCache } from './sync.js';
+
+export { initSync, addOverride, deleteOverride, saveAiSchedule } from './sync.js';
 
 // ─────────────────────────────────────────────
-// localStorage 헬퍼
+// Supabase 동기화 캐시 읽기
+// 실제 로드·구독·쓰기는 sync.js가 담당한다(기기 간 동기화, Realtime).
+// 여기서는 기존 함수 이름을 유지해 getTeacherLocation 등 동기(sync) 코드가
+// 그대로 동작하도록 캐시를 읽기만 한다.
 // ─────────────────────────────────────────────
 
 /** 임시 일정 목록 불러오기 */
 export function loadOverrides() {
-  try { return JSON.parse(localStorage.getItem('teacher_overrides') ?? '[]'); }
-  catch { return []; }
-}
-
-/** 임시 일정 목록 저장 */
-export function saveOverrides(list) {
-  localStorage.setItem('teacher_overrides', JSON.stringify(list));
+  return getOverridesCache();
 }
 
 /** AI 분석으로 저장된 시간표 불러오기 */
 export function loadAiSchedules() {
-  try { return JSON.parse(localStorage.getItem('teacher_schedules') ?? '{}'); }
-  catch { return {}; }
-}
-
-/** AI 분석 시간표 저장 */
-export function saveAiSchedule(teacherId, schedule) {
-  const all = loadAiSchedules();
-  all[teacherId] = { schedule, updatedAt: new Date().toISOString(), source: 'image_ai' };
-  localStorage.setItem('teacher_schedules', JSON.stringify(all));
+  return getAiSchedulesCache();
 }
 
 // ─────────────────────────────────────────────
@@ -40,7 +32,7 @@ export function saveAiSchedule(teacherId, schedule) {
 /**
  * 선생님의 실제 적용 시간표 반환 (ClassCell 그리드)
  * AI 저장 > 기본 하드코딩 순서
- * AI 시간표는 localStorage에 원본 문자열 그리드로 저장되므로,
+ * AI 시간표는 Supabase에 원본 문자열 그리드로 저장되므로,
  * 기본 시간표와 동일한 ClassCell 형태로 정규화해서 반환한다.
  */
 export function getEffectiveSchedule(teacherId) {

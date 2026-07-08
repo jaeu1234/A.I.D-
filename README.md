@@ -13,9 +13,11 @@ teacher-map-v2/
 │   │   ├── schedule.js   → 교시 정의, 선생님 목록 및 기본 시간표
 │   │   └── floors.js     → 층별 평면도 좌표 데이터, OFFICE_IDS, ADMIN_PIN
 │   └── lib/
-│       ├── time.js       → 시각/교시 유틸 (toMins, getCurrentPeriodIndex 등)
-│       ├── location.js   → 선생님 위치 계산 (localStorage 포함)
-│       └── map.js        → Canvas 렌더러 (카메라, 줌, 핀 드로잉)
+│       ├── time.js            → 시각/교시 유틸 (toMins, getCurrentPeriodIndex 등)
+│       ├── location.js        → 선생님 위치 계산 (Supabase 캐시 읽기)
+│       ├── map.js             → Canvas 렌더러 (카메라, 줌, 핀 드로잉)
+│       ├── supabaseClient.js  → Supabase 클라이언트 초기화
+│       └── sync.js            → 임시일정·AI 시간표 Supabase 동기화 (캐시·CRUD·Realtime)
 │
 ├── public/               → (TODO) 빌드 결과물 또는 정적 에셋
 │
@@ -33,7 +35,7 @@ teacher-map-v2/
 - **언어**: 바닐라 HTML/CSS/JavaScript (빌드 도구 없음)
 - **렌더링**: Canvas 2D API (평면도, 핀, 동선 화살표)
 - **AI**: Anthropic Claude API `claude-sonnet-4-6` (시간표 사진 분석)
-- **저장**: `localStorage` (시간표, 임시일정, API키)
+- **저장**: Supabase(Postgres + Realtime) — 임시일정·AI 시간표. `localStorage`는 API키만 보관
 - **호스팅**: 정적 파일 → GitHub Pages / Netlify 등 무료 호스팅 가능
 
 ---
@@ -41,9 +43,9 @@ teacher-map-v2/
 ## 데이터 우선순위
 
 ```
-임시 일정 (localStorage: teacher_overrides)
+임시 일정 (Supabase: overrides 테이블, 기기 간 Realtime 동기화)
     ↓ 없으면
-AI 분석 시간표 (localStorage: teacher_schedules)
+AI 분석 시간표 (Supabase: ai_schedules 테이블, 기기 간 Realtime 동기화)
     ↓ 없으면
 기본 하드코딩 시간표 (src/data/schedule.js)
 ```
@@ -81,9 +83,10 @@ AI 분석 시간표 (localStorage: teacher_schedules)
 
 ### 🟡 개선 필요
 
-5. **localStorage만 사용 → 기기 간 동기화 없음**
-   - 선생님이 A 컴퓨터에서 임시일정 등록해도 전자칠판에 미반영
-   - Firebase Firestore 또는 Supabase 연동 필요
+5. ~~localStorage만 사용 → 기기 간 동기화 없음~~ ✅ 완료 (2026-07-08)
+   - Supabase(`overrides`/`ai_schedules` 테이블) + Realtime으로 임시일정·AI 시간표를 기기 간 동기화
+   - 연동 코드: `src/lib/supabaseClient.js`, `src/lib/sync.js`. 스키마: `supabase_schema.sql`
+   - 단, 기본 시간표(`TEACHERS`, `src/data/schedule.js`)는 여전히 코드 배포로만 갱신됨
 
 6. **PIN 보안 취약**
    - `ADMIN_PIN = '1234'` 하드코딩, 클라이언트에 노출
@@ -100,7 +103,7 @@ AI 분석 시간표 (localStorage: teacher_schedules)
 
 - [ ] `src/` 기반으로 index.html 재작성 (ES module import 사용)
 - [ ] 동선 화살표 완성 (`_drawTeacherRoute`)
-- [ ] Firebase 연동으로 멀티 기기 동기화
+- [x] Supabase 연동으로 멀티 기기 동기화 (2026-07-08)
 - [ ] 선생님별 개별 PIN 또는 구글 로그인
-- [ ] 실제 학교 시간표 데이터 입력
+- [x] 실제 학교 시간표 데이터 입력 (2026-07-08, 1학년 1~10반)
 - [ ] 반응형 / 전자칠판 풀스크린 최적화

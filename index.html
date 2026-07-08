@@ -236,7 +236,7 @@
       getCurrentPeriodIndex, getTodayIndex, isWeekend,
     } from './src/lib/time.js';
     import {
-      getTeacherLocation, buildTimeline, getNextMove, resolveRoom, getClassSchedule,
+      getTeacherLocation, buildTimeline, getNextMove, resolveRoom, getClassSchedule, initSync,
     } from './src/lib/location.js';
     import {
       initCanvas, render, resetZoom, setFloorAndReset,
@@ -263,11 +263,23 @@
     }
 
     // ── 초기화 ────────────────────────
-    initCanvas(canvas);
-    buildFloorTabs();
-    buildTeacherList();
-    switchFloor(1);
-    updateClock();
+    // 다른 기기(관리자 임시일정 등록, AI 시간표 업로드)의 변경이 Realtime으로
+    // 들어오면 현재 화면(선택된 선생님/반)을 다시 그린다.
+    function rerenderCurrentSelection() {
+      render();
+      if (viewMode === 'teacher' && selectedId) renderInfo();
+      if (viewMode === 'class' && selectedClass) renderClassInfo(selectedClass.grade, selectedClass.classNum);
+    }
+
+    async function boot() {
+      await initSync(rerenderCurrentSelection);
+      initCanvas(canvas);
+      buildFloorTabs();
+      buildTeacherList();
+      switchFloor(1);
+      updateClock();
+    }
+    boot();
 
     // 1분마다 시각·위치 갱신
     setInterval(() => { updateClock(); render(); if (selectedId) renderInfo(); }, 30000);
