@@ -269,12 +269,19 @@
     }
 
     // ── 저장 ───────────────────────
-    $('save').onclick = () => {
+    $('save').onclick = async () => {
       const schedule = collectTable();
       const id = $('teacher').value;
-      saveAiSchedule(id, schedule);
-      const t = TEACHERS.find(x => x.id === id);
-      setStatus('saveStatus', 'ok', `${t ? t.name : id} 선생님 시간표를 저장했습니다. 학생 화면에 반영됩니다.`);
+      $('save').disabled = true;
+      try {
+        await saveAiSchedule(id, schedule);
+        const t = TEACHERS.find(x => x.id === id);
+        setStatus('saveStatus', 'ok', `${t ? t.name : id} 선생님 시간표를 저장했습니다. 학생 화면에 반영됩니다.`);
+      } catch {
+        setStatus('saveStatus', 'err', '저장에 실패했습니다. 다시 시도해주세요.');
+      } finally {
+        $('save').disabled = false;
+      }
     };
 
     // ── 유틸 ───────────────────────

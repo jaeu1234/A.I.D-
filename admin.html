@@ -129,7 +129,7 @@
   <script type="module">
     import { TEACHERS, PERIODS, DAYS } from './src/data/schedule.js';
     import { FLOORS, ADMIN_PIN } from './src/data/floors.js';
-    import { loadOverrides, saveOverrides, getEffectiveSchedule } from './src/lib/location.js';
+    import { loadOverrides, addOverride, deleteOverride, getEffectiveSchedule, initSync } from './src/lib/location.js';
     import { getLocalDateStr } from './src/lib/time.js';
 
     const $ = (id) => document.getElementById(id);
@@ -145,10 +145,11 @@
     }
 
     // ── PIN 게이트 ──────────────────
-    function tryPin() {
+    async function tryPin() {
       if ($('pin').value === ADMIN_PIN) {
         $('gate').classList.add('hidden');
         $('app').classList.remove('hidden');
+        await initSync(() => { renderOverrides(); renderSummary(); });
         initApp();
       } else {
         $('pinErr').textContent = 'PIN이 올바르지 않습니다.';
@@ -177,7 +178,7 @@
       // 오늘 날짜 기본값 (UTC 기준 toISOString은 자정~오전9시 사이 하루 전 날짜가 되므로 로컬 날짜 사용)
       $('fDate').value = getLocalDateStr();
 
-      $('addBtn').onclick = addOverride;
+      $('addBtn').onclick = registerOverride;
       $('sTeacher').addEventListener('change', renderSummary);
 
       renderOverrides();
@@ -192,7 +193,7 @@
     }
 
     // ── 임시일정 등록 ──────────────
-    function addOverride() {
+    async function registerOverride() {
       const floor = Number($('fFloor').value);
       const roomId = $('fRoom').value;
       const room = FLOORS[floor].rooms.find(r => r.id === roomId);
@@ -209,11 +210,16 @@
       };
       if (!ov.date) { alert('날짜를 선택하세요.'); return; }
 
-      const list = loadOverrides();
-      list.push(ov);
-      saveOverrides(list);
-      $('fNote').value = '';
-      renderOverrides();
+      $('addBtn').disabled = true;
+      try {
+        await addOverride(ov);
+        $('fNote').value = '';
+        renderOverrides();
+      } catch {
+        alert('임시일정 등록에 실패했습니다. 다시 시도해주세요.');
+      } finally {
+        $('addBtn').disabled = false;
+      }
     }
 
     // ── 목록 렌더 ──────────────────
@@ -222,7 +228,7 @@
       const body = $('ovBody');
       $('ovEmpty').classList.toggle('hidden', list.length > 0);
 
-      body.innerHTML = list.map((o, i) => {
+      body.innerHTML = list.map((o) => {
         const t = TEACHERS.find(x => x.id === o.teacherId);
         const pLabel = PERIODS[o.periodIdx]?.label ?? '-';
         return `<tr>
@@ -231,16 +237,20 @@
           <td>${escapeHtml(pLabel)}</td>
           <td>${escapeHtml(o.label)}${o.floor != null ? ` <span style="color:#8a90a0">(${o.floor === 0 ? '지하' : o.floor + '층'})</span>` : ''}</td>
           <td>${o.note ? escapeHtml(o.note) : '-'}</td>
-          <td><button class="del" data-i="${i}">삭제</button></td>
+          <td><button class="del" data-id="${o.id}">삭제</button></td>
         </tr>`;
       }).join('');
 
       body.querySelectorAll('.del').forEach(btn => {
-        btn.onclick = () => {
-          const list = loadOverrides();
-          list.splice(Number(btn.dataset.i), 1);
-          saveOverrides(list);
-          renderOverrides();
+        btn.onclick = async () => {
+          btn.disabled = true;
+          try {
+            await deleteOverride(Number(btn.dataset.id));
+            renderOverrides();
+          } catch {
+            alert('임시일정 삭제에 실패했습니다. 다시 시도해주세요.');
+            btn.disabled = false;
+          }
         };
       });
     }
