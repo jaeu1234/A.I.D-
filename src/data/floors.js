@@ -1,187 +1,217 @@
 // ─────────────────────────────────────────────
-// 방 색상 팔레트
+// 방 색상 팔레트 (2026 교실배치도 기준)
+// 교실은 학년별 색(1학년 초록·2학년 파랑·3학년 주황)으로 구분한다.
 // ─────────────────────────────────────────────
 const C = {
-  class:   { fill: '#eef2ff', stroke: '#b0bcf0' }, // 일반 교실
-  office:  { fill: '#e6f4ea', stroke: '#86c997' }, // 교무실
-  special: { fill: '#fff8e1', stroke: '#f0c878' }, // 특별실
-  lab:     { fill: '#e1f5fe', stroke: '#80caee' }, // 실험·컴퓨터실
-  admin:   { fill: '#fce4ec', stroke: '#f0a0b8' }, // 행정·교장
-  hall:    { fill: '#f5f5f2', stroke: '#e0e0e0' }, // 복도·계단
-  toilet:  { fill: '#f0f0f0', stroke: '#cccccc' }, // 화장실
-  lib:     { fill: '#f3e5f5', stroke: '#c986e0' }, // 도서관
-  gym:     { fill: '#e8f5e9', stroke: '#80c880' }, // 체육·강당
-  counsel: { fill: '#fff3e0', stroke: '#ffb74d' }, // 상담실
-  annex:   { fill: '#e8f4fd', stroke: '#90caf9' }, // 별관
-  lab2:    { fill: '#ffecd2', stroke: '#ffb347' }, // 교과연구실
+  g1:      { fill: '#dcedc8', stroke: '#9ccc65' }, // 1학년 교실
+  g2:      { fill: '#d6e2ff', stroke: '#9fb4ef' }, // 2학년 교실
+  g3:      { fill: '#ffe0b2', stroke: '#ffb74d' }, // 3학년 교실
+  office:  { fill: '#c8e6c9', stroke: '#81c784' }, // 교무실
+  home:    { fill: '#e8f5e9', stroke: '#a5d6a7' }, // 홈베이스
+  lab2:    { fill: '#ffecb3', stroke: '#ffca62' }, // 교과연구실
+  cafe:    { fill: '#e7def5', stroke: '#b39ddb' }, // 수업카페·학습카페
+  special: { fill: '#fff8e1', stroke: '#f0c878' }, // 일반 특별실
+  lab:     { fill: '#e1f5fe', stroke: '#80caee' }, // 실험·컴퓨터·미디어
+  admin:   { fill: '#fce4ec', stroke: '#f0a0b8' }, // 행정·교장·보건
+  music:   { fill: '#e1bee7', stroke: '#ba68c8' }, // 음악실
+  counsel: { fill: '#f8bbd0', stroke: '#f06292' }, // 상담·창의인성
+  lib:     { fill: '#ffcc80', stroke: '#ffa726' }, // 도서관
+  gym:     { fill: '#c5e1a5', stroke: '#8bc34a' }, // 체육관·강당
+  annex:   { fill: '#c8e6c9', stroke: '#81c784' }, // 경건관·상생문 별관
+  stair:   { fill: '#ece9e0', stroke: '#c9c6bb' }, // 계단
+  toilet:  { fill: '#b3e5fc', stroke: '#4fc3f7' }, // 화장실
+  hall:    { fill: '#f5f5f2', stroke: '#e0e0e0' }, // 복도
+};
+const TYPE_OF = {
+  g1:'class', g2:'class', g3:'class', office:'office', home:'special', lab2:'special',
+  cafe:'special', special:'special', lab:'special', admin:'special', music:'special',
+  counsel:'special', lib:'special', gym:'special', annex:'special', stair:'hall', toilet:'toilet',
 };
 
 // ─────────────────────────────────────────────
-// 층별 평면도 데이터 (2026학년도 교실배치도 기준)
-// 좌표 단위: 가상 px (W×H 기준). 스캔 도면을 그대로 축척한 것이 아니라
-// 방 이름·상대 위치를 보존한 개략적(schematic) 배치이며, 필요하면 아래
-// x/y/w/h 값만 조정하면 된다.
-// type: 'class' | 'office' | 'special' | 'hall' | 'toilet'
-//
-// 주의: 교실 id는 "학년-반"(예: '2-9') 형식이며, 실제 건물에서는
-// 학년 숫자가 물리적 층수와 다르다(예: 1학년 교실이 5층·4층에 있음).
-// 어떤 층에 있는지는 findRoomFloor()로 조회해야 한다. → location.js 참고
+// 층 레이아웃 빌더
+// 방을 왼쪽부터 순서대로 배치(x 자동 계산). 위/아래 두 줄(top/bot)과 그 사이
+// 복도, 층 전체를 가르는 계단·화장실(div)로 구성. 별관은 abs로 절대 배치.
 // ─────────────────────────────────────────────
+const TOP_H = 100, BOT_Y = 118, BOT_H = 100, FLOOR_H = 220;
+
+function makeFloor(label) {
+  const rooms = [];
+  let tx = 0, bx = 0;
+  const push = (id, l, x, y, w, h, ck) =>
+    rooms.push({ id, label: l, x, y, w, h, ...C[ck], type: TYPE_OF[ck] });
+  const api = {
+    // 층 전체 높이를 가르는 계단/화장실
+    div(id, l, w, ck) { const x = Math.max(tx, bx); push(id, l, x, 0, w, FLOOR_H, ck); tx = bx = x + w; return api; },
+    top(id, l, w, ck) { push(id, l, tx, 0, w, TOP_H, ck); tx += w; return api; },
+    bot(id, l, w, ck) { push(id, l, bx, BOT_Y, w, BOT_H, ck); bx += w; return api; },
+    tgap(w) { tx += w; return api; },
+    bgap(w) { bx += w; return api; },
+    sync() { const m = Math.max(tx, bx); tx = bx = m; return api; },
+    abs(id, l, x, y, w, h, ck) { push(id, l, x, y, w, h, ck); return api; },
+    at() { return Math.max(tx, bx); },
+    corridor(id, x0, x1) { push(id, '복도', x0, 100, x1 - x0, 18, 'hall'); return api; },
+    build() {
+      const W = Math.max(...rooms.map(r => r.x + r.w));
+      const H = Math.max(FLOOR_H, ...rooms.map(r => r.y + r.h));
+      return { W, H, label, rooms };
+    },
+  };
+  return api;
+}
+
+// 별관 한 줄을 x0부터 배치 → 다음 x 반환
+function annexRow(api, x0, y, h, list) {
+  let x = x0;
+  list.forEach(([id, l, w, ck]) => { api.abs(id, l, x, y, w, h, ck); x += w; });
+  return x;
+}
+
+// ─────────────────────────────────────────────
+// 층별 평면도 (2026학년도 교실배치도)
+// 교실 id는 "학년-반"(예: '2-9'). 학년 숫자와 실제 층수는 다르다
+// (1학년 교실이 5·4층에 있음) → 위치는 findRoomFloor()로 조회. location.js 참고
+// ─────────────────────────────────────────────
+function build5() {
+  const f = makeFloor('5층');
+  f.div('stair5L', '계단', 40, 'stair').div('toilet5L', '화장실', 46, 'toilet');
+  const lx = f.at();
+  // 세그먼트1: 홈베이스1·연구실 (위) / 1-1~1-5 (아래)
+  f.top('hub1', '홈베이스1', 130, 'home').top('kor-lab5', '국어교과연구실', 92, 'lab2').top('eng-lab5', '영어교과연구실', 92, 'lab2');
+  f.bot('1-1', '1-1', 70, 'g1').bot('1-2', '1-2', 70, 'g1').bot('1-3', '1-3', 70, 'g1').bot('1-4', '1-4', 70, 'g1').bot('1-5', '1-5', 70, 'g1');
+  f.sync();
+  f.div('stair5M', '계단', 40, 'stair');
+  // 세그먼트2: 생활교양연구실·화장실 (위) / 교무실·수업카페3·2-1~2-4 (아래)
+  f.top('life-lab5', '생활교양교과연구실', 120, 'lab2').top('toilet5M', '화장실', 46, 'toilet');
+  f.bot('office5', '교무실(안생·진로·창의·융과)', 158, 'office').bot('cafe3', '수업카페3', 66, 'cafe');
+  f.bot('2-1', '2-1', 70, 'g2').bot('2-2', '2-2', 70, 'g2').bot('2-3', '2-3', 70, 'g2').bot('2-4', '2-4', 70, 'g2');
+  f.sync();
+  const rx = f.at();
+  f.corridor('hall5', lx, rx);
+  f.div('stair5R', '계단', 40, 'stair').div('toilet5R', '화장실', 48, 'toilet');
+  // 상생문 별관
+  const ax = f.at() + 38;
+  annexRow(f, ax, 0,     100, [['pray-room', '기도실', 70, 'annex'], ['inst-storage2', '악기창고2', 70, 'annex'], ['music2', '음악실2', 70, 'music']]);
+  annexRow(f, ax, BOT_Y, 100, [['club-room', '동아리실', 62, 'annex'], ['prep-room5', '준비실', 62, 'annex'], ['music1', '음악실1', 62, 'music'], ['inst-storage1', '악기창고1', 62, 'annex']]);
+  return f.build();
+}
+
+function build4() {
+  const f = makeFloor('4층');
+  f.div('stair4L', '계단', 40, 'stair').div('toilet4L', '화장실', 46, 'toilet');
+  const lx = f.at();
+  f.top('hub2', '홈베이스2', 130, 'home').top('math-lab', '수학교과연구실', 92, 'lab2').top('soc-lab', '사회교과연구실', 92, 'lab2');
+  f.bot('1-6', '1-6', 70, 'g1').bot('1-7', '1-7', 70, 'g1').bot('1-8', '1-8', 70, 'g1').bot('1-9', '1-9', 70, 'g1').bot('1-10', '1-10', 70, 'g1');
+  f.sync();
+  f.div('stair4M', '계단', 40, 'stair');
+  f.top('toilet4M', '화장실(교사·학생)', 70, 'toilet');
+  f.bot('office4', '교무실(교무·1학년·2학년)', 158, 'office').bot('cafe2', '수업카페2', 66, 'cafe');
+  f.bot('2-5', '2-5', 70, 'g2').bot('2-6', '2-6', 70, 'g2').bot('2-7', '2-7', 70, 'g2').bot('2-8', '2-8', 70, 'g2');
+  f.sync();
+  const rx = f.at();
+  f.corridor('hall4', lx, rx);
+  f.div('stair4R', '계단', 40, 'stair').div('toilet4R', '화장실', 48, 'toilet');
+  const ax = f.at() + 38;
+  annexRow(f, ax, 0,     100, [['resource-room', '리소스실', 78, 'annex'], ['jangyoungsil', '장영실실', 130, 'annex']]);
+  annexRow(f, ax, BOT_Y, 100, [['heojun-lab', '허준실험실', 66, 'annex'], ['pe-lab', '예체능교과연구실', 66, 'lab2'], ['prep-room4', '준비실', 50, 'annex'], ['sejong-room', '세종대왕실', 60, 'annex']]);
+  return f.build();
+}
+
+function build3() {
+  const f = makeFloor('3층');
+  f.div('stair3L', '계단', 40, 'stair').div('toilet3L', '화장실', 46, 'toilet');
+  const lx = f.at();
+  // 위: 도서관(넓게) / 아래: 특별실·교무실·수업카페·학습카페·2-9·2-10·문서보관실
+  f.top('library', '도서관', 300, 'lib');
+  f.bot('eco-room', '생태전환실', 88, 'special').bot('career3', '진로상담실', 84, 'counsel')
+   .bot('daejin-on', '대진-ON진로활동실', 100, 'lab').bot('ai-room', '신나는AI교실', 96, 'lab')
+   .bot('prep-room3', '준비실', 54, 'special').bot('media-prep', '디지털미디어실', 96, 'lab');
+  f.sync(); // 도서관 오른쪽 끝과 아래 특별실 끝을 맞춤
+  f.top('stair3M', '계단', 40, 'stair').top('toilet3M', '교사화장실', 62, 'toilet');
+  f.bot('office3', '교무실(연구·환경·정보·3학년)', 158, 'office').bot('cafe1', '수업카페1', 66, 'cafe').bot('study-cafe', '학습카페', 70, 'cafe')
+   .bot('2-9', '2-9', 70, 'g2').bot('2-10', '2-10', 70, 'g2').bot('doc-room3', '문서보관실', 90, 'special');
+  f.sync();
+  const rx = f.at();
+  f.corridor('hall3', lx, rx);
+  f.div('stair3R', '계단', 40, 'stair').div('toilet3R', '화장실', 48, 'toilet');
+  const ax = f.at() + 38;
+  annexRow(f, ax, 0,     100, [['earth-lab', '지학실', 90, 'lab'], ['physics-lab', '물리실', 90, 'lab']]);
+  annexRow(f, ax, BOT_Y, 100, [['chem-lab', '화학실', 60, 'lab'], ['sci-lab', '과학교과연구실', 90, 'lab2'], ['bio-lab', '생명과학실', 80, 'lab']]);
+  // 경건관 3층
+  f.abs('gyeongeon-3f', '경건관 3층 자습실', ax + 200, 0, 90, FLOOR_H, 'annex');
+  return f.build();
+}
+
+function build2() {
+  const f = makeFloor('2층');
+  f.div('stair2L', '계단', 40, 'stair').div('toilet2L', '화장실', 46, 'toilet');
+  const lx = f.at();
+  f.top('computer-room', '컴퓨터실', 95, 'lab').top('media-room2', '영상미디어실', 95, 'lab')
+   .top('maker-space', '메이커스페이스', 96, 'special').top('parent-room', '학부모회의실', 84, 'special');
+  f.bot('3-11', '3-11', 68, 'g3').bot('3-1', '3-1', 68, 'g3').bot('3-2', '3-2', 68, 'g3').bot('3-3', '3-3', 68, 'g3').bot('3-4', '3-4', 68, 'g3').bot('3-5', '3-5', 68, 'g3');
+  f.sync();
+  f.top('hub3', '홈베이스3', 90, 'home').top('multi-room', '다목적실', 90, 'special');
+  f.bot('3-6', '3-6', 68, 'g3').bot('3-7', '3-7', 68, 'g3').bot('3-8', '3-8', 68, 'g3').bot('3-9', '3-9', 68, 'g3').bot('3-10', '3-10', 68, 'g3');
+  f.sync();
+  const rx = f.at();
+  f.corridor('hall2', lx, rx);
+  f.div('stair2R', '계단', 40, 'stair').div('toilet2R', '학생화장실(교사·학생)', 70, 'toilet');
+  // 별관(창의인성·미술 등)
+  const ax = f.at() + 38;
+  annexRow(f, ax, 0,     100, [['creative-room', '창의인성지도실', 66, 'counsel'], ['cpr-room', '심폐소생교육', 66, 'special'], ['art-room2a', '미술교과실', 60, 'special']]);
+  annexRow(f, ax, BOT_Y, 100, [['lounge2', '휴게실', 66, 'special'], ['prep-room2', '준비실', 66, 'special'], ['art-room2b', '미술교과실', 60, 'special']]);
+  // 경건관·신념관 2층
+  f.abs('gyeongeon-2f', '경건관 2층 설렘ON실', ax + 200, 0, 90, FLOOR_H, 'annex');
+  f.abs('sinnyeom-2f', '신념관 2층 강당', ax + 290, 0, 90, FLOOR_H, 'gym');
+  return f.build();
+}
+
+function build1() {
+  const f = makeFloor('1층');
+  // 운동장 서쪽의 별도 건물 (1층 단층 체육관) — 실제 체육 수업 장소.
+  f.abs('gymnasium', '체육관', 0, 0, 140, FLOOR_H, 'gym');
+  f.tgap(170).bgap(170); // 체육관과 본관 사이 간격(운동장)
+  f.div('stair1L', '계단', 40, 'stair').div('toilet1L', '화장실', 46, 'toilet');
+  const lx = f.at();
+  f.top('night-duty', '숙직실', 90, 'admin').top('doc-room1', '문서보관실(행)', 90, 'admin');
+  f.bot('wee-class', 'Wee클래스', 68, 'counsel').bot('career1', '진로상담실', 68, 'counsel')
+   .bot('server-room', '서버실', 54, 'lab').bot('info-room1', '전산실', 62, 'lab')
+   .bot('student-council', '학생회실', 68, 'special').bot('media-room1', '미디어', 54, 'lab')
+   .bot('broadcast1', '방송실', 62, 'special').bot('health-room1', '보건실', 62, 'admin');
+  f.sync();
+  f.div('stair1M', '계단', 40, 'stair').top('toilet1M', '교사화장실', 62, 'toilet');
+  f.bot('entrance1', '현관', 62, 'special')
+   .bot('admin-room1', '행정실', 90, 'admin').bot('principal-room', '교장실', 68, 'admin')
+   .bot('seminar1', '세미나실', 68, 'special').bot('lecture-hall1', '대강의실', 110, 'special');
+  f.sync();
+  const rx = f.at();
+  f.corridor('hall1', lx, rx);
+  f.div('stair1R', '계단', 40, 'stair').div('toilet1R', '화장실', 48, 'toilet');
+  // 창고·인쇄실
+  const ax = f.at() + 30;
+  f.abs('storage1', '창고', ax, 0, 90, 100, 'special');
+  f.abs('print-room', '인쇄실', ax, BOT_Y, 90, 100, 'special');
+  // 경건관·신념관 1층
+  f.abs('gyeongeon-1f', '경건관 1층 자습실', ax + 120, 0, 90, FLOOR_H, 'annex');
+  f.abs('sinnyeom-1f', '신념관 1층 식당', ax + 210, 0, 90, FLOOR_H, 'gym');
+  return f.build();
+}
+
+function build0() {
+  const f = makeFloor('지하');
+  // 지하는 경건관·신념관만 (본관 지하는 시간표 대상 아님)
+  f.abs('gyeongeon-b', '경건관 지하 체육공간·문화공간', 0, 0, 130, 200, 'annex');
+  f.abs('sinnyeom-b', '신념관 지하 식당', 150, 0, 100, 200, 'gym');
+  return f.build();
+}
+
 export const FLOORS = {
-
-  // ── 5층 ─────────────────────────────────────
-  5: { W: 1100, H: 220, label: '5층', rooms: [
-    { id: 'toilet5L',      label: '화장실',            x: 0,   y: 0,   w: 48, h: 100, ...C.toilet,  type: 'toilet'  },
-    { id: 'hub1',          label: '홈베이스1',          x: 48,  y: 0,   w: 95, h: 100, ...C.special, type: 'special' },
-    { id: 'kor-lab5',      label: '국어교과연구실',      x: 143, y: 0,   w: 90, h: 100, ...C.lab2,    type: 'special' },
-    { id: 'eng-lab5',      label: '영어교과연구실',      x: 233, y: 0,   w: 90, h: 100, ...C.lab2,    type: 'special' },
-    { id: 'honor-lab',     label: '명예교장교과연구실',  x: 323, y: 0,   w: 90, h: 100, ...C.lab2,    type: 'special' },
-    { id: '1-1',           label: '1-1',               x: 413, y: 0,   w: 72, h: 100, ...C.class,   type: 'class'   },
-    { id: '1-2',           label: '1-2',               x: 485, y: 0,   w: 72, h: 100, ...C.class,   type: 'class'   },
-    { id: '1-3',           label: '1-3',               x: 557, y: 0,   w: 72, h: 100, ...C.class,   type: 'class'   },
-    { id: '1-4',           label: '1-4',               x: 629, y: 0,   w: 72, h: 100, ...C.class,   type: 'class'   },
-    { id: '1-5',           label: '1-5',               x: 701, y: 0,   w: 72, h: 100, ...C.class,   type: 'class'   },
-    { id: 'office5',       label: '교무실(안생·진로·창의·융합)', x: 0,   y: 120, w: 190, h: 100, ...C.office,  type: 'office' },
-    { id: '2-1',           label: '2-1',               x: 190, y: 120, w: 72, h: 100, ...C.class,   type: 'class'   },
-    { id: '2-2',           label: '2-2',               x: 262, y: 120, w: 72, h: 100, ...C.class,   type: 'class'   },
-    { id: '2-3',           label: '2-3',               x: 334, y: 120, w: 72, h: 100, ...C.class,   type: 'class'   },
-    { id: '2-4',           label: '2-4',               x: 406, y: 120, w: 72, h: 100, ...C.class,   type: 'class'   },
-    { id: 'toilet5R',      label: '화장실',            x: 880, y: 0,   w: 50, h: 220, ...C.toilet,  type: 'toilet'  },
-    { id: 'hall5',         label: '복도',              x: 0,   y: 100, w: 880, h: 20,  ...C.hall,    type: 'hall'    },
-    // 상생문 별관 (5층)
-    { id: 'pray-room',     label: '기도실',            x: 940,  y: 0,   w: 53, h: 110, ...C.annex, type: 'special' },
-    { id: 'inst-storage2', label: '악기창고2',          x: 993,  y: 0,   w: 53, h: 110, ...C.annex, type: 'special' },
-    { id: 'music2',        label: '음악실2',            x: 1046, y: 0,   w: 54, h: 110, ...C.annex, type: 'special' },
-    { id: 'club-room',     label: '동아리실',           x: 940,  y: 110, w: 40, h: 110, ...C.annex, type: 'special' },
-    { id: 'prep-room5',    label: '준비실',            x: 980,  y: 110, w: 40, h: 110, ...C.annex, type: 'special' },
-    { id: 'music1',        label: '음악실1',            x: 1020, y: 110, w: 40, h: 110, ...C.annex, type: 'special' },
-    { id: 'inst-storage1', label: '악기창고1',          x: 1060, y: 110, w: 40, h: 110, ...C.annex, type: 'special' },
-  ]},
-
-  // ── 4층 ─────────────────────────────────────
-  4: { W: 1100, H: 220, label: '4층', rooms: [
-    { id: 'toilet4L',   label: '화장실',              x: 0,   y: 0,   w: 48, h: 100, ...C.toilet,  type: 'toilet'  },
-    { id: 'hub2',       label: '홈베이스2',            x: 48,  y: 0,   w: 95, h: 100, ...C.special, type: 'special' },
-    { id: 'math-lab',   label: '수학교과연구실',        x: 143, y: 0,   w: 95, h: 100, ...C.lab2,    type: 'special' },
-    { id: 'soc-lab',    label: '사회교과연구실',        x: 238, y: 0,   w: 95, h: 100, ...C.lab2,    type: 'special' },
-    { id: '1-6',        label: '1-6',                 x: 333, y: 0,   w: 72, h: 100, ...C.class,   type: 'class'   },
-    { id: '1-7',        label: '1-7',                 x: 405, y: 0,   w: 72, h: 100, ...C.class,   type: 'class'   },
-    { id: '1-8',        label: '1-8',                 x: 477, y: 0,   w: 72, h: 100, ...C.class,   type: 'class'   },
-    { id: '1-9',        label: '1-9',                 x: 549, y: 0,   w: 72, h: 100, ...C.class,   type: 'class'   },
-    { id: '1-10',       label: '1-10',                x: 621, y: 0,   w: 72, h: 100, ...C.class,   type: 'class'   },
-    { id: 'office4',    label: '교무실(교무·1학년·2학년)', x: 0,   y: 120, w: 190, h: 100, ...C.office,  type: 'office' },
-    { id: '2-5',        label: '2-5',                 x: 190, y: 120, w: 72, h: 100, ...C.class,   type: 'class'   },
-    { id: '2-6',        label: '2-6',                 x: 262, y: 120, w: 72, h: 100, ...C.class,   type: 'class'   },
-    { id: '2-7',        label: '2-7',                 x: 334, y: 120, w: 72, h: 100, ...C.class,   type: 'class'   },
-    { id: '2-8',        label: '2-8',                 x: 406, y: 120, w: 72, h: 100, ...C.class,   type: 'class'   },
-    { id: 'toilet4R',   label: '화장실(교사·학생)',     x: 880, y: 0,   w: 50, h: 220, ...C.toilet,  type: 'toilet'  },
-    { id: 'hall4',      label: '복도',                 x: 0,   y: 100, w: 880, h: 20,  ...C.hall,    type: 'hall'    },
-    // 상생문 별관 (4층)
-    { id: 'resource-room', label: '리소스실',          x: 940,  y: 0,   w: 80, h: 110, ...C.annex, type: 'special' },
-    { id: 'jangyoungsil',  label: '장영실실',          x: 1020, y: 0,   w: 80, h: 110, ...C.annex, type: 'special' },
-    { id: 'heojun-lab',    label: '허준실험실',        x: 940,  y: 110, w: 40, h: 110, ...C.annex, type: 'special' },
-    { id: 'pe-lab',        label: '예체능교과연구실',  x: 980,  y: 110, w: 40, h: 110, ...C.annex, type: 'special' },
-    { id: 'prep-room4',    label: '준비실',            x: 1020, y: 110, w: 40, h: 110, ...C.annex, type: 'special' },
-    { id: 'sejong-room',   label: '세종대왕실',        x: 1060, y: 110, w: 40, h: 110, ...C.annex, type: 'special' },
-  ]},
-
-  // ── 3층 ─────────────────────────────────────
-  3: { W: 1100, H: 220, label: '3층', rooms: [
-    { id: 'toilet3L',   label: '화장실',                     x: 0,   y: 0,   w: 48,  h: 100, ...C.toilet,  type: 'toilet'  },
-    { id: 'library',    label: '도서관',                     x: 48,  y: 0,   w: 200, h: 220, ...C.lib,     type: 'special' },
-    { id: 'toilet3M',   label: '화장실(교사)',                x: 248, y: 0,   w: 48,  h: 100, ...C.toilet,  type: 'toilet'  },
-    { id: 'eco-room',   label: '생태전환실',                  x: 296, y: 0,   w: 80,  h: 100, ...C.special, type: 'special' },
-    { id: 'career3',    label: '진로상담실',                  x: 376, y: 0,   w: 80,  h: 100, ...C.counsel, type: 'special' },
-    { id: 'daejin-on',  label: '대진-ON진로활동실',           x: 456, y: 0,   w: 95,  h: 100, ...C.lab,     type: 'special' },
-    { id: 'ai-room',    label: '신나는AI교실',                x: 551, y: 0,   w: 85,  h: 100, ...C.lab,     type: 'special' },
-    { id: 'media-prep', label: '준비실·디지털미디어실',       x: 636, y: 0,   w: 95,  h: 100, ...C.lab,     type: 'special' },
-    { id: 'office3',    label: '교무실(연구·환경·경상·보·3학년)', x: 731, y: 0,   w: 149, h: 100, ...C.office,  type: 'office' },
-    { id: 'cafe1',      label: '수업카페1',                   x: 296, y: 120, w: 80,  h: 100, ...C.special, type: 'special' },
-    { id: 'study-cafe', label: '학습카페',                    x: 376, y: 120, w: 80,  h: 100, ...C.special, type: 'special' },
-    { id: '2-9',        label: '2-9',                        x: 456, y: 120, w: 72,  h: 100, ...C.class,   type: 'class'   },
-    { id: '2-10',       label: '2-10',                       x: 528, y: 120, w: 72,  h: 100, ...C.class,   type: 'class'   },
-    { id: 'doc-room3',  label: '문서보관실',                  x: 600, y: 120, w: 90,  h: 100, ...C.special, type: 'special' },
-    { id: 'toilet3R',   label: '화장실',                     x: 880, y: 0,   w: 50,  h: 220, ...C.toilet,  type: 'toilet'  },
-    { id: 'hall3',      label: '복도',                        x: 0,   y: 100, w: 880, h: 20,  ...C.hall,    type: 'hall'    },
-    // 상생문 별관 (3층)
-    { id: 'earth-lab',  label: '지학실',                     x: 940,  y: 0,   w: 80, h: 110, ...C.lab,  type: 'special' },
-    { id: 'physics-lab',label: '물리실',                     x: 1020, y: 0,   w: 80, h: 110, ...C.lab,  type: 'special' },
-    { id: 'chem-lab',   label: '화학실',                     x: 940,  y: 110, w: 53, h: 110, ...C.lab,  type: 'special' },
-    { id: 'sci-lab',    label: '과학교과연구실',              x: 993,  y: 110, w: 53, h: 110, ...C.lab2, type: 'special' },
-    { id: 'bio-lab',    label: '생명과학실',                  x: 1046, y: 110, w: 54, h: 110, ...C.lab,  type: 'special' },
-  ]},
-
-  // ── 2층 ─────────────────────────────────────
-  2: { W: 1100, H: 240, label: '2층', rooms: [
-    { id: 'toilet2L',     label: '화장실',                x: 0,   y: 0,   w: 48, h: 110, ...C.toilet,  type: 'toilet'  },
-    { id: 'computer-room',label: '컴퓨터실',              x: 48,  y: 0,   w: 85, h: 110, ...C.lab,     type: 'special' },
-    { id: 'media-room2',  label: '영상미디어실',          x: 133, y: 0,   w: 85, h: 110, ...C.lab,     type: 'special' },
-    { id: 'maker-space',  label: '메이커스페이스·학부모회의실', x: 218, y: 0,   w: 110, h: 110, ...C.special, type: 'special' },
-    { id: '3-11',         label: '3-11',                 x: 328, y: 0,   w: 68, h: 110, ...C.class,   type: 'class'   },
-    { id: '3-1',          label: '3-1',                  x: 396, y: 0,   w: 68, h: 110, ...C.class,   type: 'class'   },
-    { id: '3-2',          label: '3-2',                  x: 464, y: 0,   w: 68, h: 110, ...C.class,   type: 'class'   },
-    { id: '3-3',          label: '3-3',                  x: 532, y: 0,   w: 68, h: 110, ...C.class,   type: 'class'   },
-    { id: '3-4',          label: '3-4',                  x: 600, y: 0,   w: 68, h: 110, ...C.class,   type: 'class'   },
-    { id: '3-5',          label: '3-5',                  x: 668, y: 0,   w: 68, h: 110, ...C.class,   type: 'class'   },
-    { id: 'career-room2', label: '창업진로지도실',        x: 736, y: 0,   w: 60, h: 110, ...C.counsel, type: 'special' },
-    { id: 'sim-edu',      label: '심체소셜교육',          x: 796, y: 0,   w: 60, h: 110, ...C.special, type: 'special' },
-    { id: 'art-room2a',   label: '미술교과실',            x: 856, y: 0,   w: 40, h: 110, ...C.special, type: 'special' },
-    { id: 'toilet2M',     label: '화장실(교사·학생)',      x: 0,   y: 130, w: 48, h: 110, ...C.toilet,  type: 'toilet'  },
-    { id: 'hub3',         label: '홈베이스3',             x: 48,  y: 130, w: 90, h: 110, ...C.special, type: 'special' },
-    { id: 'multi-room',   label: '다목적실',              x: 138, y: 130, w: 90, h: 110, ...C.special, type: 'special' },
-    { id: '3-6',          label: '3-6',                  x: 328, y: 130, w: 68, h: 110, ...C.class,   type: 'class'   },
-    { id: '3-7',          label: '3-7',                  x: 396, y: 130, w: 68, h: 110, ...C.class,   type: 'class'   },
-    { id: '3-8',          label: '3-8',                  x: 464, y: 130, w: 68, h: 110, ...C.class,   type: 'class'   },
-    { id: '3-9',          label: '3-9',                  x: 532, y: 130, w: 68, h: 110, ...C.class,   type: 'class'   },
-    { id: '3-10',         label: '3-10',                 x: 600, y: 130, w: 68, h: 110, ...C.class,   type: 'class'   },
-    { id: 'lounge2',      label: '휴게실',                x: 736, y: 130, w: 60, h: 110, ...C.special, type: 'special' },
-    { id: 'prep-room2',   label: '준비실',                x: 796, y: 130, w: 60, h: 110, ...C.special, type: 'special' },
-    { id: 'art-room2b',   label: '미술교과실',            x: 856, y: 130, w: 40, h: 110, ...C.special, type: 'special' },
-    { id: 'toilet2R',     label: '화장실',                x: 896, y: 0,   w: 44, h: 240, ...C.toilet,  type: 'toilet'  },
-    { id: 'hall2',        label: '복도',                  x: 0,   y: 110, w: 940, h: 20,  ...C.hall,    type: 'hall'    },
-    // 경건관 · 신념관 (2층)
-    { id: 'gyeongeon-2f', label: '경건관 2층 설렘온실',   x: 940,  y: 0, w: 80, h: 240, ...C.annex, type: 'special' },
-    { id: 'sinnyeom-2f',  label: '신념관 2층 강당',       x: 1020, y: 0, w: 80, h: 240, ...C.gym,   type: 'special' },
-  ]},
-
-  // ── 1층 ─────────────────────────────────────
-  // 본관은 x=150부터 시작(왼쪽 x0~130은 운동장 서쪽의 체육관 자리).
-  1: { W: 1250, H: 240, label: '1층', rooms: [
-    // 운동장 서쪽에 있는 별도 건물 (1층 단층 체육관) — 실제 체육 수업 장소.
-    { id: 'gymnasium',     label: '체육관',            x: 0,    y: 0,   w: 130, h: 240, ...C.gym,   type: 'special' },
-    { id: 'toilet1L',      label: '화장실',            x: 150, y: 0,   w: 48, h: 110, ...C.toilet,  type: 'toilet'  },
-    { id: 'night-duty',    label: '숙직실',            x: 198, y: 0,   w: 85, h: 110, ...C.admin,   type: 'special' },
-    { id: 'doc-room1',     label: '문서보관실(행정)',   x: 283, y: 0,   w: 90, h: 110, ...C.admin,   type: 'special' },
-    { id: 'toilet1M',      label: '교사화장실',        x: 373, y: 0,   w: 48, h: 110, ...C.toilet,  type: 'toilet'  },
-    { id: 'storage1',      label: '창고',              x: 1000, y: 0,   w: 90, h: 55,  ...C.special, type: 'special' },
-    { id: 'print-room',    label: '인쇄실',            x: 1000, y: 55,  w: 90, h: 55,  ...C.special, type: 'special' },
-    { id: 'wee-class',     label: 'Wee클래스',         x: 150, y: 130, w: 68, h: 110, ...C.counsel, type: 'special' },
-    { id: 'career1',       label: '진로상담실',        x: 218, y: 130, w: 68, h: 110, ...C.counsel, type: 'special' },
-    { id: 'admin-office1', label: '서비실',            x: 286, y: 130, w: 60, h: 110, ...C.admin,   type: 'special' },
-    { id: 'server-room',   label: '전산실',            x: 346, y: 130, w: 60, h: 110, ...C.lab,     type: 'special' },
-    { id: 'student-council', label: '학생회실',        x: 406, y: 130, w: 68, h: 110, ...C.special, type: 'special' },
-    { id: 'media-room1',   label: '미디어실',          x: 474, y: 130, w: 60, h: 110, ...C.lab,     type: 'special' },
-    { id: 'broadcast1',    label: '방송실',            x: 534, y: 130, w: 60, h: 110, ...C.special, type: 'special' },
-    { id: 'health-room1',  label: '보건실',            x: 594, y: 130, w: 60, h: 110, ...C.admin,   type: 'special' },
-    { id: 'entrance1',     label: '현관',              x: 654, y: 130, w: 60, h: 110, ...C.hall,    type: 'hall'    },
-    { id: 'admin-room1',   label: '행정실',            x: 714, y: 130, w: 68, h: 110, ...C.admin,   type: 'special' },
-    { id: 'principal-room',label: '교장실',            x: 782, y: 130, w: 60, h: 110, ...C.admin,   type: 'special' },
-    { id: 'seminar1',      label: '세미나실',          x: 842, y: 130, w: 68, h: 110, ...C.special, type: 'special' },
-    { id: 'lecture-hall1', label: '대강의실',          x: 910, y: 130, w: 90, h: 110, ...C.special, type: 'special' },
-    { id: 'toilet1R',      label: '화장실',            x: 1000, y: 130, w: 46, h: 110, ...C.toilet,  type: 'toilet'  },
-    { id: 'hall1',         label: '복도',              x: 150, y: 110, w: 940, h: 20,  ...C.hall,    type: 'hall'    },
-    // 경건관 · 신념관 (1층)
-    { id: 'gyeongeon-1f',  label: '경건관 1층 자습실', x: 1090, y: 0, w: 80, h: 240, ...C.annex, type: 'special' },
-    { id: 'sinnyeom-1f',   label: '신념관 1층 식당',   x: 1170, y: 0, w: 80, h: 240, ...C.gym,   type: 'special' },
-  ]},
-
-  // ── 지하 ────────────────────────────────────
-  0: { W: 1100, H: 200, label: '지하', rooms: [
-    { id: 'gym-class',    label: '체육교과실',                    x: 0,    y: 0, w: 200, h: 200, ...C.gym,   type: 'special' },
-    // 경건관 · 신념관 (지하)
-    { id: 'gyeongeon-b',  label: '경건관 지하 체육공간·문화공간',  x: 940,  y: 0, w: 80,  h: 200, ...C.annex, type: 'special' },
-    { id: 'sinnyeom-b',   label: '신념관 지하 식당',               x: 1020, y: 0, w: 80,  h: 200, ...C.gym,   type: 'special' },
-  ]},
+  5: build5(),
+  4: build4(),
+  3: build3(),
+  2: build2(),
+  1: build1(),
+  0: build0(),
 };
 
 // 층별 교무실 room ID 매핑 (2층·1층·지하에는 교무실이 없음)
