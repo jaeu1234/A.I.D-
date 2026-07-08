@@ -53,20 +53,29 @@ export function getEffectiveSchedule(teacherId) {
 // ─────────────────────────────────────────────
 // 특별과목 → 전용 특별실 매핑
 // 체육·음악·미술·정보·실험은 학생이 특별실로 이동해 수업하므로, 교사도 반
-// 교실이 아니라 이 특별실에 있다(같은 과목 수업이 연달아 있으면 교사는
-// 특별실에 머물고 학생만 바뀐다). room id는 floors.js 기준.
+// 교실이 아니라 이 특별실에 있다(같은 과목이 연달아 있으면 교사는 특별실에
+// 머물고 학생만 바뀐다). room id는 floors.js 기준.
 //
-// ⚠️ 아래 방 배정은 floors.js에 존재하는 방으로 임의 지정한 기본값이다.
-// 실제 학교 운영과 다르면(예: 미술실 2개를 교사별로 나눠 쓰는 경우 등)
-// room id만 바꾸면 된다. 과목당 방 1개(과목 단위) 매핑.
+// 과목 단위 기본 매핑. room이 null이면 지도에 없는 장소(예: 체육관은 별도
+// 건물)라 라벨만 표시하고 지도 핀은 찍지 않는다.
 // ─────────────────────────────────────────────
-const SPECIAL_ROOMS = {
-  체육: { room: 'gym-class',     label: '체육교과실' },
-  음악: { room: 'music1',        label: '음악실1' },
+const SUBJECT_ROOMS = {
+  음악: { room: 'music2',        label: '음악실2' },   // 1학년용(복도 오른쪽)
   미술: { room: 'art-room2a',    label: '미술교과실' },
-  정보: { room: 'computer-room', label: '컴퓨터실' },
-  실험: { room: 'bio-lab',       label: '생명과학실' },
+  실험: { room: 'bio-lab',       label: '생명과학실' }, // 통과(이론)는 교실 유지
+  정보: { room: 'computer-room', label: '컴퓨터실' },   // 기본(강혜영 등)
+  체육: { room: null,            label: '체육관' },     // 운동장 옆 별도 건물, 지도 핀 없음
 };
+
+// 같은 과목이라도 교사마다 쓰는 방이 다른 경우의 override (id = schedule.js 기준).
+const TEACHER_ROOMS = {
+  KS: { 정보: { room: 'ai-room', label: '신나는AI교실' } }, // 김선희 → 3층 AI실
+};
+
+/** 교사·과목 → 특별실({room,label}) 또는 null(특별과목 아님) */
+function resolveSpecialRoom(teacherId, subject) {
+  return TEACHER_ROOMS[teacherId]?.[subject] ?? SUBJECT_ROOMS[subject] ?? null;
+}
 
 // ─────────────────────────────────────────────
 // 위치 계산
@@ -130,9 +139,11 @@ export function getTeacherLocation(teacherId, dayIdx, periodIdx) {
     // floor는 "학년"이 아니라 FLOORS 데이터에서 실제 위치를 조회해서 구한다.
     if (cls.grade != null && cls.class != null) {
       // 특별과목은 전용 특별실에서 수업 → 교사 위치를 그 특별실로 잡는다.
-      const sr = SPECIAL_ROOMS[cls.subject];
+      // room이 null인 특별실(체육관 등)은 라벨만 두고 지도 위치는 비운다.
+      const sr = resolveSpecialRoom(teacherId, cls.subject);
       if (sr) {
-        return { type: 'class', label: sr.label, room: sr.room, floor: findRoomFloor(sr.room) };
+        return { type: 'class', label: sr.label, room: sr.room ?? null,
+                 floor: sr.room ? findRoomFloor(sr.room) : null };
       }
       const roomId = `${cls.grade}-${cls.class}`;
       return { type: 'class', label: cls.label, room: roomId, floor: findRoomFloor(roomId) };
