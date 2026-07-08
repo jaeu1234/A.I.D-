@@ -69,7 +69,9 @@ const SUBJECT_ROOMS = {
 
 // 같은 과목이라도 교사마다 쓰는 방이 다른 경우의 override (id = schedule.js 기준).
 const TEACHER_ROOMS = {
-  KS: { 정보: { room: 'ai-room', label: '신나는AI교실' } }, // 김선희 → 3층 AI실
+  KS:  { 정보: { room: 'ai-room',    label: '신나는AI교실' } }, // 김선희 → 3층 AI실
+  GDH: { 미술: { room: 'art-room2a', label: '미술교과실' } },   // 고동현 → 위쪽 미술실(1·2반)
+  LEK: { 미술: { room: 'art-room2b', label: '미술교과실' } },   // 이은경 → 아래쪽 미술실(3·4·5반)
 };
 
 /** 교사·과목 → 특별실({room,label}) 또는 null(특별과목 아님) */
