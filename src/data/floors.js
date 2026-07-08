@@ -26,6 +26,7 @@ const TYPE_OF = {
   g1:'class', g2:'class', g3:'class', office:'office', home:'special', lab2:'special',
   cafe:'special', special:'special', lab:'special', admin:'special', music:'special',
   counsel:'special', lib:'special', gym:'special', annex:'special', stair:'hall', toilet:'toilet',
+  hall:'hall',
 };
 
 // ─────────────────────────────────────────────
@@ -137,8 +138,8 @@ function build3() {
   const ax = f.at() + 38;
   annexRow(f, ax, 0,     100, [['earth-lab', '지학실', 90, 'lab'], ['physics-lab', '물리실', 90, 'lab']]);
   annexRow(f, ax, BOT_Y, 100, [['chem-lab', '화학실', 60, 'lab'], ['sci-lab', '과학교과연구실', 90, 'lab2'], ['bio-lab', '생명과학실', 80, 'lab']]);
-  // 경건관 3층
-  f.abs('gyeongeon-3f', '경건관 3층 자습실', ax + 200, 0, 90, FLOOR_H, 'annex');
+  // 경건관 3층 (상생문 별관 오른쪽 끝 뒤에 배치 — 겹침 방지)
+  f.abs('gyeongeon-3f', '경건관 3층 자습실', ax + 260, 0, 90, FLOOR_H, 'annex');
   return f.build();
 }
 
