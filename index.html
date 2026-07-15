@@ -141,6 +141,7 @@
     .now-card .lbl { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: .05em; text-transform: uppercase; }
     .now-card .loc { font-size: 19px; font-weight: 800; margin-top: 5px; letter-spacing: -.01em; }
     .now-card .next { font-size: 13px; color: #555; margin-top: 9px; }
+    .now-card .next .route-hint { display: inline-block; font-size: 11px; font-weight: 700; color: var(--accent); background: rgba(59,91,219,.1); border-radius: 6px; padding: 1px 6px; margin-left: 4px; }
     .now-card .note { font-size: 12px; color: #c0501a; margin-top: 7px; font-weight: 600; }
     .timeline { padding: 4px 18px 24px; animation: fadeIn .3s ease; }
     .timeline h3 { font-size: 12px; font-weight: 700; color: var(--muted); margin: 14px 0 8px; text-transform: uppercase; letter-spacing: .04em; }
@@ -233,7 +234,7 @@
     import { PERIODS, DAYS, TEACHERS } from './src/data/schedule.js';
     import { FLOORS, getAllClassrooms, findRoomFloor } from './src/data/floors.js';
     import {
-      getCurrentPeriodIndex, getTodayIndex, isWeekend,
+      getCurrentPeriodIndex, getBreakAfterIndex, getTodayIndex, isWeekend, toMins,
     } from './src/lib/time.js';
     import {
       getTeacherLocation, buildTimeline, getNextMove, resolveRoom, getClassSchedule, initSync,
@@ -241,6 +242,7 @@
     import {
       initCanvas, render, resetZoom, setFloorAndReset,
       zoom, pan, zoomToRoom, hitTestPin, setSelectedId, getCamera,
+      getTravelerState, setRouteProgress, invalidateRouteCache,
     } from './src/lib/map.js';
 
     // ── 상태 ──────────────────────────
@@ -266,6 +268,7 @@
     // 다른 기기(관리자 임시일정 등록, AI 시간표 업로드)의 변경이 Realtime으로
     // 들어오면 현재 화면(선택된 선생님/반)을 다시 그린다.
     function rerenderCurrentSelection() {
+      invalidateRouteCache(); // Realtime로 임시일정·AI 시간표가 바뀌면 경로 캐시 무효화
       render();
       if (viewMode === 'teacher' && selectedId) renderInfo();
       if (viewMode === 'class' && selectedClass) renderClassInfo(selectedClass.grade, selectedClass.classNum);
@@ -281,8 +284,12 @@
     }
     boot();
 
-    // 1분마다 시각·위치 갱신
-    setInterval(() => { updateClock(); render(); if (selectedId) renderInfo(); }, 30000);
+    // 1분마다 시각·위치 갱신 (선택된 선생님이 이동 중이면 경로 애니메이션 재가동)
+    setInterval(() => {
+      updateClock();
+      render();
+      if (selectedId) { renderInfo(); ensureRouteAnim(); }
+    }, 30000);
     // 창 크기 변화 대응
     window.addEventListener('resize', () => resetZoom());
 
@@ -317,6 +324,7 @@
       $('modeClassBtn').classList.toggle('active', mode === 'class');
       $('search').value = '';
       $('search').placeholder = mode === 'teacher' ? '선생님 이름 · 과목 검색' : '반 검색 (예: 1-7)';
+      stopRouteAnim();
       selectedId = null; setSelectedId(null);
       selectedClass = null;
       renderList();
@@ -426,6 +434,81 @@
         <div class="class-note">담당 선생님 정보가 없는 시간(자율학습·동아리 등)은 빈 칸(·)으로 표시됩니다.</div>`;
     }
 
+    // ── 이동 경로 애니메이션 ──────────
+    // 쉬는 시간에 선택된 선생님의 이동 점을 경로 위에서 움직이고, 다른 층으로
+    // 넘어가면 자동으로 층을 전환한다. 실시간 표류는 눈에 잘 안 보이므로,
+    // 선택 직후 0→현재진행률로 짧게 스윕(인트로)한 뒤 1초 틱으로 실시각을 따른다.
+    let routeTimer = null, introRAF = null, breakTimeout = null;
+    // 이동 점이 마지막으로 관측된 층. "점이 실제로 층을 바꿨을 때"만 따라가기 위한 기준.
+    let lastTravelerFloor = null;
+
+    function stopRouteAnim() {
+      if (routeTimer)   { clearInterval(routeTimer); routeTimer = null; }
+      if (introRAF)     { cancelAnimationFrame(introRAF); introRAF = null; }
+      if (breakTimeout) { clearTimeout(breakTimeout); breakTimeout = null; }
+      lastTravelerFloor = null;
+      setRouteProgress(null);
+    }
+
+    // 이동 점이 "직전 관측 층과 다른 층으로 넘어갔을 때"만 그 층으로 따라간다.
+    // currentFloor와 매 틱 비교하지 않으므로, 사용자가 수동으로 다른 층을 봐도 튕기지 않는다.
+    function followTravelerFloor() {
+      if (!selectedId) return false;
+      const st = getTravelerState(selectedId);
+      const f = st?.pos?.floor;
+      if (f == null) return false;
+      const crossed = f !== lastTravelerFloor;
+      lastTravelerFloor = f;
+      if (crossed && f !== currentFloor && FLOORS[f]) { switchFloor(f); return true; }
+      return false;
+    }
+
+    // 다음 쉬는 시간 시작 시각에 정확히 애니메이션을 켠다(30초 지연·폴링 없이).
+    function scheduleNextBreak() {
+      const pi = getCurrentPeriodIndex();
+      if (pi < 0) return; // 쉬는 시간·방과후엔 예약 안 함
+      const now = new Date();
+      const nowMs = (now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()) * 1000;
+      const endMs = toMins(PERIODS[pi].end) * 60000;
+      const wait = Math.max(endMs - nowMs, 0) + 500;
+      breakTimeout = setTimeout(() => { breakTimeout = null; startRouteAnim(); }, wait);
+    }
+
+    // 이동 중이 아니면 정적 렌더 + 다음 쉬는 시간 예약, 이동 중이면 인트로 스윕 → 1초 틱.
+    function startRouteAnim() {
+      stopRouteAnim();
+      if (!selectedId) return;
+      const st = getTravelerState(selectedId);
+      if (!st || !st.moving) { render(); scheduleNextBreak(); return; }
+
+      const target = st.progress, t0 = performance.now(), dur = 1400;
+      const ease = (p) => (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2);
+      setRouteProgress(0);
+      (function intro(now) {
+        if (!selectedId) { introRAF = null; setRouteProgress(null); return; } // 선택 해제 시 즉시 중단
+        const p = Math.min((now - t0) / dur, 1);
+        setRouteProgress(target * ease(p));
+        if (!followTravelerFloor()) render(); // switchFloor는 내부에서 render 호출
+        if (p < 1) { introRAF = requestAnimationFrame(intro); }
+        else {
+          introRAF = null;
+          setRouteProgress(null); // 이후 실시각 기준
+          routeTimer = setInterval(() => {
+            if (!selectedId) return stopRouteAnim();
+            const s = getTravelerState(selectedId);
+            if (!s || !s.moving) { startRouteAnim(); return; } // 쉬는 시간 종료 → 다음 쉬는 시간 예약
+            if (!followTravelerFloor()) render();
+          }, 1000);
+        }
+      })(performance.now());
+    }
+
+    // 선택 상태에서 이동이 시작됐는데 애니메이션이 꺼져 있으면 켠다(30초 틱의 안전망).
+    function ensureRouteAnim() {
+      if (!selectedId || routeTimer || introRAF || breakTimeout) return;
+      startRouteAnim();
+    }
+
     // ── 선생님 선택 ───────────────────
     function selectTeacher(id) {
       // 반 모드에서 지도 핀을 클릭해 선생님을 선택한 경우 선생님 모드로 전환
@@ -441,10 +524,13 @@
       setSelectedId(id);
       buildTeacherList($('search').value);
 
-      // 현재 위치가 있는 층으로 이동 후 해당 방으로 줌
+      // 현재 위치가 있는 층으로 이동 후 해당 방으로 줌.
+      // 쉬는 시간(pi<0)에는 직전 교시 위치를 기준으로 잡아 이동 경로의 출발점이 보이게 한다.
       const day = getTodayIndex();
       const pi  = getCurrentPeriodIndex();
-      const loc = getTeacherLocation(id, day, pi);
+      const breakAf = getBreakAfterIndex();
+      const curPi = pi >= 0 ? pi : (breakAf >= 0 ? breakAf : -1);
+      const loc = getTeacherLocation(id, day, curPi);
       // loc.floor가 없으면(교무실 등 층이 정해지지 않은 위치) 현재 보고 있는 층을 유지
       const targetFloor = loc.floor ?? currentFloor;
 
@@ -454,6 +540,7 @@
       else render();
 
       renderInfo();
+      startRouteAnim();
     }
 
     // ── 정보 패널 렌더 ────────────────
@@ -471,7 +558,14 @@
       let nextHtml = '';
       if (move && move.toLoc) {
         const verb = move.isMovingNow ? '이동 중 →' : '다음';
-        nextHtml = `<div class="next">${verb} <b>${escapeHtml(move.toPeriod.label)}</b> · ${escapeHtml(move.toLoc.label)}</div>`;
+        const st = getTravelerState(t.id);
+        let hint = '';
+        if (st.route && st.route.crossFloor) {
+          hint = ` <span class="route-hint">${st.route.fromFloor}층→${st.route.toFloor}층 · 계단</span>`;
+        }
+        const pct = (move.isMovingNow && st.route)
+          ? ` <span class="route-hint">${Math.round(st.progress * 100)}%</span>` : '';
+        nextHtml = `<div class="next">${verb} <b>${escapeHtml(move.toPeriod.label)}</b> · ${escapeHtml(move.toLoc.label)}${hint}${pct}</div>`;
       }
       const noteHtml = cur.note ? `<div class="note">📌 ${escapeHtml(cur.note)}</div>` : '';
 

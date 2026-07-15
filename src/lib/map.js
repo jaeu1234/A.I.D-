@@ -1,7 +1,11 @@
-import { TEACHERS } from '../data/schedule.js';
+import { TEACHERS, PERIODS } from '../data/schedule.js';
 import { FLOORS } from '../data/floors.js';
 import { getTeacherLocation, getNextMove, resolveRoom, statusColor } from './location.js';
-import { getCurrentPeriodIndex, getBreakAfterIndex, getTodayIndex } from './time.js';
+import {
+  getCurrentPeriodIndex, getNextPeriodIndex, getBreakAfterIndex, getTodayIndex,
+  getNowMins, toMins,
+} from './time.js';
+import { resolveEndpoint, computeRoute, routePointAt } from './route.js';
 
 // ─────────────────────────────────────────────
 // 카메라 상태 (외부에서 직접 변경 금지)
@@ -11,9 +15,13 @@ let _CW = 0, _CH = 0;
 let _currentFloor = 1;
 let _selectedId   = null;
 let _canvas       = null;
+// 이동 점 진행률 override. null이면 현재 시각(쉬는 시간 경과)에서 계산한다.
+// index.html이 선택 직후 인트로 스윕(0→실진행률)을 재생할 때만 값을 넣는다.
+let _routeProgress = null;
 
 export function getCamera() { return { x: _camX, y: _camY, z: _camZ }; }
 export function setSelectedId(id) { _selectedId = id; }
+export function setRouteProgress(p) { _routeProgress = p; }
 
 // ─────────────────────────────────────────────
 // 초기화
@@ -269,73 +277,239 @@ function _drawLines(ctx, fit, cx, cyCenter, weight, color) {
   fit.lines.forEach((l, i) => ctx.fillText(l, cx, startY + i * fit.lineH));
 }
 
-function _drawTeacherRoute(ctx, teacherId) {
-  const floor   = FLOORS[_currentFloor];
+/**
+ * 선택된 선생님의 현재→다음 이동 경로 컨텍스트를 한 번에 계산한다.
+ * 렌더(_drawTeacherRoute)와 층 추적(getTravelerState)이 공유한다.
+ * @returns {{
+ *   fromEP, toEP, route,          // 엔드포인트·경로(같은 방/불가면 route=null)
+ *   moving:boolean, progress:number // 쉬는 시간 이동 중 여부·시각 기준 진행률
+ * } | null}
+ */
+// _routeContext 결과 캐시. 진행률은 분 단위(getNowMins)로만 바뀌고 경로는
+// 층·override에만 의존하므로, (teacherId, 현재 분) 키로 캐시하면 같은 분 안의
+// 반복 호출(render + getTravelerState)이 재계산을 피한다. override/AI 시간표가
+// Realtime으로 바뀌면 invalidateRouteCache()로 무효화한다.
+let _rcCache = { key: null, val: null };
+
+/** override/AI 시간표 변경 등으로 위치가 바뀌었을 때 경로 캐시를 비운다. */
+export function invalidateRouteCache() { _rcCache = { key: null, val: null }; }
+
+function _routeContext(teacherId) {
+  const cacheKey = teacherId + '|' + getNowMins();
+  if (_rcCache.key === cacheKey) return _rcCache.val;
+
   const day     = getTodayIndex();
   const pi      = getCurrentPeriodIndex();
   const breakAf = getBreakAfterIndex();
 
-  // 현재 위치
-  // 등교 전·하교 후(pi<0 이고 쉬는 시간도 아님)에는 표시할 "현재 교시"가 없으므로
-  // -1을 그대로 넘겨 room:null을 받는다. 과거에는 0(1교시)으로 고정 대체해
-  // 하교 후에도 1교시 위치가 잘못 강조 표시되는 버그가 있었다.
-  const curLocPi  = pi >= 0 ? pi : (breakAf >= 0 ? breakAf : -1);
-  const curLoc    = getTeacherLocation(teacherId, day, curLocPi);
-  const curRoom   = resolveRoom(curLoc.room, curLoc.floor, _currentFloor, floor);
+  // 현재 위치 기준 교시. 등교 전·하교 후(둘 다 -1)에는 경로 없음.
+  const curLocPi = pi >= 0 ? pi : (breakAf >= 0 ? breakAf : -1);
+  if (curLocPi < 0) { _rcCache = { key: cacheKey, val: null }; return null; }
 
-  // 다음 위치
-  const t       = TEACHERS.find(x => x.id === teacherId);
-  if (!t) return;
+  const curLoc = getTeacherLocation(teacherId, day, curLocPi);
+  const move   = getNextMove(teacherId);
+  const toLoc  = move?.toLoc ?? null;
 
-  // 현재 방 강조
-  if (curRoom) {
-    ctx.strokeStyle = t.color;
-    ctx.lineWidth   = 3;
-    ctx.beginPath();
-    ctx.roundRect(curRoom.x - 3, curRoom.y - 3, curRoom.w + 6, curRoom.h + 6, 8);
-    ctx.stroke();
-    ctx.globalAlpha = 0.15;
-    ctx.fillStyle   = t.color;
-    ctx.fill();
-    ctx.globalAlpha = 1;
+  // office(층 자유)는 상대 엔드포인트 층을 힌트로 해석 → 불필요한 층 이동 방지.
+  const fromEP = resolveEndpoint(curLoc, toLoc?.floor ?? _currentFloor);
+  const toEP   = toLoc ? resolveEndpoint(toLoc, fromEP?.floor ?? _currentFloor) : null;
+
+  let route = null;
+  if (fromEP && toEP && !(fromEP.floor === toEP.floor && fromEP.room.id === toEP.room.id)) {
+    route = computeRoute(fromEP.room, toEP.room, fromEP.floor, toEP.floor);
   }
 
-  // 다음 위치가 같은 층에 있으면 화살표로 동선 표시
-  // (다음 교시 위치가 다른 층이거나 없으면 생략)
-  const move = getNextMove(teacherId);
-  if (curRoom && move && move.toLoc) {
-    const nextRoom = resolveRoom(move.toLoc.room, move.toLoc.floor, _currentFloor, floor);
-    if (nextRoom && nextRoom.id !== curRoom.id) {
-      _drawRouteArrow(ctx, curRoom, nextRoom, t.color);
+  // 진행률: 쉬는 시간이면 (지금-직전교시끝)/(다음교시시작-직전교시끝).
+  let moving = false, progress = 0;
+  if (breakAf >= 0 && move) {
+    const nextPi = getNextPeriodIndex();
+    if (nextPi >= 0) {
+      const s = toMins(PERIODS[breakAf].end);
+      const e = toMins(PERIODS[nextPi].start);
+      progress = e > s ? Math.min(Math.max((getNowMins() - s) / (e - s), 0), 1) : 1;
+      moving = true;
     }
+  }
+  const val = { curLoc, fromEP, toEP, route, moving, progress };
+  _rcCache = { key: cacheKey, val };
+  return val;
+}
+
+/**
+ * 현재 선택된 선생님의 이동 상태(진행률·현재 위치·층)를 반환.
+ * index.html이 이동 점을 따라 자동으로 층을 전환하는 데 사용한다.
+ * @returns {{moving:boolean, progress:number, pos:{x,y,floor,onStairs}|null, route:object|null}}
+ */
+export function getTravelerState(teacherId) {
+  const c = _routeContext(teacherId);
+  if (!c || !c.route) return { moving: false, progress: 0, pos: null, route: null };
+  const eff = _routeProgress != null ? _routeProgress : c.progress;
+  return { moving: c.moving, progress: eff, pos: routePointAt(c.route, eff), route: c.route };
+}
+
+function _drawTeacherRoute(ctx, teacherId) {
+  const t = TEACHERS.find(x => x.id === teacherId);
+  if (!t) return;
+  const c = _routeContext(teacherId);
+  if (!c) return;
+
+  // 현재 방(출발) 강조 — 현재 층에 있을 때만
+  if (c.fromEP && c.fromEP.floor === _currentFloor) {
+    _highlightRoom(ctx, c.fromEP.room, t.color, 0.15);
+  }
+
+  if (!c.route) return;
+
+  // 현재 층에 해당하는 세그먼트 경로 그리기
+  const seg = c.route.segments.find(s => s.floor === _currentFloor);
+  if (seg) _drawRoutePath(ctx, seg.pts, t.color);
+
+  // 계단 경유(다른 층) 라벨. 화살표는 실제 오르내림 방향(층수 비교)으로 그린다.
+  if (c.route.crossFloor && seg) {
+    if (_currentFloor === c.route.fromFloor) {
+      // 출발 층: 세그먼트 끝(계단)에 목적지 층 안내(위층이면 ▲, 아래층이면 ▼)
+      _drawStairLabel(ctx, seg.pts[seg.pts.length - 1], c.route.toFloor, t.color, c.route.toFloor > c.route.fromFloor);
+    } else if (_currentFloor === c.route.toFloor) {
+      // 도착 층: 세그먼트 시작(계단)에 출발 층 안내(출발이 위층이면 ▲ = 위에서 내려옴)
+      _drawStairLabel(ctx, seg.pts[0], c.route.fromFloor, t.color, c.route.fromFloor > c.route.toFloor);
+    }
+  }
+
+  // 목적지 마커 — 목적지가 현재 층일 때
+  if (c.toEP && c.toEP.floor === _currentFloor) {
+    _drawDestMarker(ctx, c.toEP.room, t.color);
+  }
+
+  // 이동 점 — 쉬는 시간(이동 중)에만, 현재 시각 위치가 현재 층일 때.
+  // 수업 중(moving=false)에는 목적지 경로만 정적으로 보여주고 점은 찍지 않는다
+  // (진행률 0 지점에 점을 찍으면 현재 방 강조·핀과 겹쳐 "이동 중"으로 오해됨).
+  if (c.moving) {
+    const eff = _routeProgress != null ? _routeProgress : c.progress;
+    const pos = routePointAt(c.route, eff);
+    if (pos.floor === _currentFloor) _drawTraveler(ctx, pos.x, pos.y, t.color);
   }
 }
 
-/** 현재 방 → 다음 방으로 이어지는 점선 화살표 */
-function _drawRouteArrow(ctx, fromRoom, toRoom, color) {
-  const x1 = fromRoom.x + fromRoom.w / 2, y1 = fromRoom.y + fromRoom.h / 2;
-  const x2 = toRoom.x + toRoom.w / 2,     y2 = toRoom.y + toRoom.h / 2;
-
+/** 방 테두리 강조 + 반투명 채움 */
+function _highlightRoom(ctx, room, color, alpha) {
   ctx.save();
   ctx.strokeStyle = color;
-  ctx.fillStyle   = color;
-  ctx.lineWidth   = 2.5;
-  ctx.setLineDash([7, 5]);
+  ctx.lineWidth   = 3;
   ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y2);
+  ctx.roundRect(room.x - 3, room.y - 3, room.w + 6, room.h + 6, 8);
+  ctx.stroke();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle   = color;
+  ctx.fill();
+  ctx.restore();
+}
+
+/** 복도를 따라가는 폴리라인(외곽 후광 + 점선 + 진행 방향 화살촉) */
+function _drawRoutePath(ctx, pts, color) {
+  if (!pts || pts.length < 2) return;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap  = 'round';
+
+  // 외곽 후광(가독성)
+  ctx.strokeStyle = 'rgba(255,255,255,.75)';
+  ctx.lineWidth   = 7;
+  _tracePolyline(ctx, pts);
+  ctx.stroke();
+
+  // 본선(점선)
+  ctx.strokeStyle = color;
+  ctx.lineWidth   = 3;
+  ctx.setLineDash([8, 6]);
+  _tracePolyline(ctx, pts);
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // 화살촉
-  const angle   = Math.atan2(y2 - y1, x2 - x1);
-  const headLen = 11;
+  // 진행 방향 화살촉(각 절점마다 작게)
+  ctx.fillStyle = color;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i];
+    if (Math.hypot(b.x - a.x, b.y - a.y) < 14) continue;
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    _arrowHead(ctx, mx, my, Math.atan2(b.y - a.y, b.x - a.x), 8);
+  }
+  ctx.restore();
+}
+
+function _tracePolyline(ctx, pts) {
   ctx.beginPath();
-  ctx.moveTo(x2, y2);
-  ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 6), y2 - headLen * Math.sin(angle - Math.PI / 6));
-  ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 6), y2 - headLen * Math.sin(angle + Math.PI / 6));
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+}
+
+function _arrowHead(ctx, x, y, angle, len) {
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x - len * Math.cos(angle - Math.PI / 6), y - len * Math.sin(angle - Math.PI / 6));
+  ctx.lineTo(x - len * Math.cos(angle + Math.PI / 6), y - len * Math.sin(angle + Math.PI / 6));
   ctx.closePath();
   ctx.fill();
+}
+
+/** 목적지 방에 깃발형 마커 */
+function _drawDestMarker(ctx, room, color) {
+  const cx = room.x + room.w / 2, cy = room.y + room.h / 2;
+  ctx.save();
+  // 강조 링
+  ctx.strokeStyle = color;
+  ctx.lineWidth   = 2.5;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  ctx.roundRect(room.x - 2, room.y - 2, room.w + 4, room.h + 4, 7);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // 깃발
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(cx, cy - 14); ctx.lineTo(cx, cy + 4); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 14); ctx.lineTo(cx + 13, cy - 10); ctx.lineTo(cx, cy - 6);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+/** 계단 경유 안내(위/아래층 chevron + "N층"). up=true면 ▲(위층), false면 ▼(아래층) */
+function _drawStairLabel(ctx, at, floorNum, color, up) {
+  const text = `${floorNum}층`;
+  ctx.save();
+  ctx.font = '700 11px sans-serif';
+  const tw = ctx.measureText(text).width;
+  const w = tw + 26, h = 20;
+  const x = at.x - w / 2, y = at.y - h - 6;
+  ctx.fillStyle = color;
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2); ctx.fill(); ctx.stroke();
+  // chevron: 실제 오르내림 방향(up이면 ▲, 아니면 ▼)
+  ctx.fillStyle = '#fff';
+  const cyc = y + h / 2, cxc = x + 11;
+  ctx.beginPath();
+  if (up) { ctx.moveTo(cxc - 4, cyc + 2); ctx.lineTo(cxc, cyc - 3); ctx.lineTo(cxc + 4, cyc + 2); }
+  else    { ctx.moveTo(cxc - 4, cyc - 2); ctx.lineTo(cxc, cyc + 3); ctx.lineTo(cxc + 4, cyc - 2); }
+  ctx.closePath(); ctx.fill();
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, x + 18, cyc + 0.5);
+  ctx.restore();
+}
+
+/** 이동 중인 선생님 위치 점(맥동). 이동 중일 때만 호출된다. */
+function _drawTraveler(ctx, x, y, color) {
+  ctx.save();
+  const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 350);
+  // 외곽 맥동 링
+  ctx.globalAlpha = 0.25 + 0.25 * pulse;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(x, y, 11 + 5 * pulse, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = 1;
+  // 점
+  ctx.fillStyle = color;
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   ctx.restore();
 }
 
