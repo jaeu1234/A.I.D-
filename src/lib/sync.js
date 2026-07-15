@@ -11,6 +11,7 @@ import { supabase } from './supabaseClient.js';
 
 let overridesCache = [];
 let aiSchedulesCache = {};
+let classAiSchedulesCache = {};
 
 const rowToOverride = (row) => ({
   id: row.id,
@@ -38,22 +39,23 @@ function upsertAiScheduleInCache(row) {
   aiSchedulesCache[row.teacher_id] = { schedule: row.schedule, updatedAt: row.updated_at };
 }
 
-export function getOverridesCache() {
-  return overridesCache;
+function upsertClassAiScheduleInCache(row) {
+  classAiSchedulesCache[row.class_id] = { schedule: row.schedule, updatedAt: row.updated_at };
 }
 
-export function getAiSchedulesCache() {
-  return aiSchedulesCache;
-}
+export function getOverridesCache() { return overridesCache; }
+export function getAiSchedulesCache() { return aiSchedulesCache; }
+export function getClassAiSchedulesCache() { return classAiSchedulesCache; }
 
 /**
  * 초기 데이터 로드 + Realtime 구독 시작.
  * @param {() => void} onRemoteChange 다른 기기에서 변경이 들어왔을 때 호출할 콜백(재렌더링용)
  */
 export async function initSync(onRemoteChange) {
-  const [ovRes, aiRes] = await Promise.all([
+  const [ovRes, aiRes, classRes] = await Promise.all([
     supabase.from('overrides').select('*'),
     supabase.from('ai_schedules').select('*'),
+    supabase.from('class_ai_schedules').select('*'),
   ]);
 
   if (ovRes.error) console.error('overrides 로드 실패:', ovRes.error.message);
@@ -63,6 +65,12 @@ export async function initSync(onRemoteChange) {
   else {
     aiSchedulesCache = {};
     aiRes.data.forEach(upsertAiScheduleInCache);
+  }
+
+  if (classRes.error) console.error('class_ai_schedules 로드 실패:', classRes.error.message);
+  else {
+    classAiSchedulesCache = {};
+    classRes.data.forEach(upsertClassAiScheduleInCache);
   }
 
   supabase
@@ -75,6 +83,11 @@ export async function initSync(onRemoteChange) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'ai_schedules' }, (payload) => {
       if (payload.eventType === 'DELETE') delete aiSchedulesCache[payload.old.teacher_id];
       else upsertAiScheduleInCache(payload.new);
+      onRemoteChange?.();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'class_ai_schedules' }, (payload) => {
+      if (payload.eventType === 'DELETE') delete classAiSchedulesCache[payload.old.class_id];
+      else upsertClassAiScheduleInCache(payload.new);
       onRemoteChange?.();
     })
     .subscribe((status, err) => {
@@ -120,4 +133,15 @@ export async function saveAiSchedule(teacherId, schedule) {
     .single();
   if (error) { console.error('AI 시간표 저장 실패:', error.message); throw error; }
   upsertAiScheduleInCache(data);
+}
+
+/** 반 AI 시간표 저장 (반당 1개, upsert). class_id = "학년-반" 예: "1-5" */
+export async function saveClassAiSchedule(classId, schedule) {
+  const { data, error } = await supabase
+    .from('class_ai_schedules')
+    .upsert({ class_id: classId, schedule, updated_at: new Date().toISOString() })
+    .select()
+    .single();
+  if (error) { console.error('반 AI 시간표 저장 실패:', error.message); throw error; }
+  upsertClassAiScheduleInCache(data);
 }

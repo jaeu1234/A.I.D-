@@ -74,10 +74,16 @@
         실운영에서는 서버 프록시를 통해 호출해야 합니다.</div>
     </div>
 
-    <!-- 2. 선생님 + 사진 -->
+    <!-- 2. 대상 선택 + 사진 -->
     <div class="card">
-      <h3><span class="step">2</span>선생님 선택 · 사진 업로드</h3>
-      <div class="row">
+      <h3><span class="step">2</span>대상 선택 · 사진 업로드</h3>
+      <div style="display:flex;gap:6px;margin-bottom:14px;">
+        <button class="btn btn-ghost" id="modeTeacherBtn" style="flex:1;padding:8px 0;font-size:13px;font-weight:700;background:var(--accent);color:#fff;">선생님 시간표</button>
+        <button class="btn btn-ghost" id="modeClassBtn" style="flex:1;padding:8px 0;font-size:13px;font-weight:700;">반 시간표</button>
+      </div>
+
+      <!-- 선생님 모드 -->
+      <div id="teacherRow" class="row">
         <label class="f" style="flex:1; min-width:180px;">선생님
           <select id="teacher"></select>
         </label>
@@ -85,6 +91,24 @@
           <input type="file" id="file" accept="image/*" />
         </label>
       </div>
+
+      <!-- 반 모드 -->
+      <div id="classRow" class="row hidden">
+        <label class="f" style="min-width:90px;">학년
+          <select id="grade">
+            <option value="1">1학년</option>
+            <option value="2">2학년</option>
+            <option value="3">3학년</option>
+          </select>
+        </label>
+        <label class="f" style="min-width:90px;">반
+          <select id="classNum"></select>
+        </label>
+        <label class="f" style="flex:2; min-width:200px;">시간표 사진
+          <input type="file" id="fileClass" accept="image/*" />
+        </label>
+      </div>
+
       <img id="preview" class="preview" alt="미리보기" />
       <div class="row" style="margin-top:14px;">
         <button class="btn" id="analyze" disabled>🔍 AI 분석 시작</button>
@@ -95,7 +119,7 @@
     <!-- 3. 결과 편집 -->
     <div class="card hidden" id="resultCard">
       <h3><span class="step">3</span>결과 확인 · 수정</h3>
-      <div class="hint">셀 형식: <b>과목(학년-반)</b> 예: 수학(2-1). 빈 시간은 비워두세요. 점심 열은 보통 빈칸입니다.</div>
+      <div class="hint" id="editHint">셀 형식: <b>과목(학년-반)</b> 예: 수학(2-1). 빈 시간은 비워두세요. 점심 열은 보통 빈칸입니다.</div>
       <div style="overflow-x:auto;">
         <table class="edit" id="editTable"></table>
       </div>
@@ -108,17 +132,58 @@
 
   <script type="module">
     import { TEACHERS, PERIODS, DAYS } from './src/data/schedule.js';
-    import { saveAiSchedule } from './src/lib/location.js';
+    import { getAllClassrooms } from './src/data/floors.js';
+    import { saveAiSchedule, saveClassAiSchedule } from './src/lib/location.js';
 
     const $ = (id) => document.getElementById(id);
     const MODEL = 'claude-sonnet-5';
     const KEY_LS = 'anthropic_api_key';
 
     let imageB64 = null, imageMime = null, parsed = null;
+    let currentMode = 'teacher'; // 'teacher' | 'class'
 
     // ── 선생님 select ──────────────
     $('teacher').innerHTML = TEACHERS
       .map(t => `<option value="${t.id}">${t.name} (${t.subject})</option>`).join('');
+
+    // ── 반 select 초기화 ───────────
+    function updateClassNums() {
+      const grade = Number($('grade').value);
+      const classes = getAllClassrooms().filter(c => c.grade === grade);
+      $('classNum').innerHTML = classes
+        .map(c => `<option value="${c.classNum}">${c.classNum}반</option>`).join('');
+    }
+    updateClassNums();
+    $('grade').addEventListener('change', updateClassNums);
+
+    // ── 모드 전환 ──────────────────
+    $('modeTeacherBtn').onclick = () => switchMode('teacher');
+    $('modeClassBtn').onclick   = () => switchMode('class');
+
+    function switchMode(mode) {
+      currentMode = mode;
+      imageB64 = null;
+      $('preview').style.display = 'none';
+      $('analyze').disabled = true;
+      $('resultCard').classList.add('hidden');
+      setStatus('status', '', '');
+
+      const isTeacher = mode === 'teacher';
+      $('modeTeacherBtn').style.cssText = isTeacher
+        ? 'flex:1;padding:8px 0;font-size:13px;font-weight:700;background:var(--accent);color:#fff;'
+        : 'flex:1;padding:8px 0;font-size:13px;font-weight:700;';
+      $('modeClassBtn').style.cssText = !isTeacher
+        ? 'flex:1;padding:8px 0;font-size:13px;font-weight:700;background:var(--accent);color:#fff;'
+        : 'flex:1;padding:8px 0;font-size:13px;font-weight:700;';
+
+      $('teacherRow').classList.toggle('hidden', !isTeacher);
+      $('classRow').classList.toggle('hidden', isTeacher);
+
+      $('editHint').innerHTML = isTeacher
+        ? '셀 형식: <b>과목(학년-반)</b> 예: 수학(2-1). 빈 시간은 비워두세요. 점심 열은 보통 빈칸입니다.'
+        : '셀 형식: <b>과목(선생님이름)</b> 예: 수학(홍민지). 선생님 이름이 정확해야 지도에 연동됩니다. 빈 시간은 비워두세요.';
+      $('save').textContent = isTeacher ? '💾 이 선생님 시간표로 저장' : '💾 이 반 시간표로 저장';
+    }
 
     // ── API 키 ─────────────────────
     $('apiKey').value = localStorage.getItem(KEY_LS) || '';
@@ -127,24 +192,43 @@
       setStatus('status', 'ok', '키를 저장했습니다.');
     };
 
-    // ── 파일 → base64 ──────────────
-    $('file').addEventListener('change', e => {
-      const f = e.target.files[0];
-      if (!f) return;
-      imageMime = f.type || 'image/jpeg';
-      const reader = new FileReader();
-      reader.onload = () => {
-        const dataUrl = reader.result;             // "data:image/...;base64,XXXX"
-        imageB64 = dataUrl.split(',')[1];
-        $('preview').src = dataUrl;
-        $('preview').style.display = 'block';
-        $('analyze').disabled = false;
-      };
-      reader.readAsDataURL(f);
-    });
+    // ── 파일 → base64 공통 처리 ────
+    function bindFileInput(inputId) {
+      $(inputId).addEventListener('change', e => {
+        const f = e.target.files[0];
+        if (!f) return;
+        imageMime = f.type || 'image/jpeg';
+        const reader = new FileReader();
+        reader.onload = () => {
+          imageB64 = reader.result.split(',')[1];
+          $('preview').src = reader.result;
+          $('preview').style.display = 'block';
+          $('analyze').disabled = false;
+        };
+        reader.readAsDataURL(f);
+      });
+    }
+    bindFileInput('file');
+    bindFileInput('fileClass');
 
     // ── AI 분석 ────────────────────
     $('analyze').onclick = analyze;
+
+    function buildInstruction() {
+      if (currentMode === 'teacher') {
+        return '이 이미지는 한 선생님의 주간 시간표입니다. 내용을 읽어 2차원 배열 schedule로 변환하세요. ' +
+          'schedule[요일][교시] 구조이며 요일 인덱스는 0=월,1=화,2=수,3=목,4=금 (총 5개), ' +
+          '교시 인덱스는 0~7 (1교시,2교시,3교시,4교시,점심,5교시,6교시,7교시 순, 총 8개)입니다. ' +
+          '각 칸의 값은 "과목(학년-반)" 형식 문자열(예: "수학(2-1)")로, 수업이 없으면 null로 채우세요. ' +
+          '점심 열(인덱스 4)은 일반적으로 null입니다. 읽을 수 없는 칸은 null로 두세요.';
+      }
+      const grade = $('grade').value, classNum = $('classNum').value;
+      return `이 이미지는 ${grade}학년 ${classNum}반의 주간 시간표입니다. 내용을 읽어 2차원 배열 schedule로 변환하세요. ` +
+        'schedule[요일][교시] 구조이며 요일 인덱스는 0=월,1=화,2=수,3=목,4=금 (총 5개), ' +
+        '교시 인덱스는 0~7 (1교시,2교시,3교시,4교시,점심,5교시,6교시,7교시 순, 총 8개)입니다. ' +
+        '각 칸의 값은 "과목(선생님이름)" 형식 문자열(예: "수학(홍민지)")로, 수업이 없으면 null로 채우세요. ' +
+        '점심 열(인덱스 4)은 일반적으로 null입니다. 읽을 수 없는 칸은 null로 두세요.';
+    }
 
     async function analyze() {
       const key = ($('apiKey').value || localStorage.getItem(KEY_LS) || '').trim();
@@ -154,38 +238,24 @@
       $('analyze').disabled = true;
       setStatus('status', '', '분석 중… (수 초 소요)');
 
-      const instruction =
-        '이 이미지는 한 선생님의 주간 시간표입니다. 내용을 읽어 2차원 배열 schedule로 변환하세요. ' +
-        'schedule[요일][교시] 구조이며 요일 인덱스는 0=월,1=화,2=수,3=목,4=금 (총 5개), ' +
-        '교시 인덱스는 0~7 (1교시,2교시,3교시,4교시,점심,5교시,6교시,7교시 순, 총 8개)입니다. ' +
-        '각 칸의 값은 "과목(학년-반)" 형식 문자열(예: "수학(2-1)")로, 수업이 없으면 null로 채우세요. ' +
-        '점심 열(인덱스 4)은 일반적으로 null입니다. 읽을 수 없는 칸은 null로 두세요.';
-
-      // 5×8 배열 형태를 강제하는 json_schema
       const schema = {
-        type: 'object',
-        additionalProperties: false,
-        required: ['schedule'],
+        type: 'object', additionalProperties: false, required: ['schedule'],
         properties: {
           schedule: {
             type: 'array',
-            items: {
-              type: 'array',
-              items: { anyOf: [{ type: 'string' }, { type: 'null' }] },
-            },
+            items: { type: 'array', items: { anyOf: [{ type: 'string' }, { type: 'null' }] } },
           },
         },
       };
 
       const body = {
-        model: MODEL,
-        max_tokens: 4096,
+        model: MODEL, max_tokens: 4096,
         output_config: { format: { type: 'json_schema', schema } },
         messages: [{
           role: 'user',
           content: [
             { type: 'image', source: { type: 'base64', media_type: imageMime, data: imageB64 } },
-            { type: 'text', text: instruction },
+            { type: 'text', text: buildInstruction() },
           ],
         }],
       };
@@ -194,25 +264,19 @@
         const res = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
-            'x-api-key': key,
-            'anthropic-version': '2023-06-01',
+            'x-api-key': key, 'anthropic-version': '2023-06-01',
             'content-type': 'application/json',
             'anthropic-dangerous-direct-browser-access': 'true',
           },
           body: JSON.stringify(body),
         });
-
         const data = await res.json();
         if (!res.ok) {
-          const msg = data?.error?.message || `HTTP ${res.status}`;
-          setStatus('status', 'err', `분석 실패: ${msg}`);
-          $('analyze').disabled = false;
-          return;
+          setStatus('status', 'err', `분석 실패: ${data?.error?.message || 'HTTP ' + res.status}`);
+          $('analyze').disabled = false; return;
         }
-
         const textBlock = (data.content || []).find(b => b.type === 'text');
         if (!textBlock) { setStatus('status', 'err', '응답에서 결과를 찾지 못했습니다.'); $('analyze').disabled = false; return; }
-
         let result;
         try { result = JSON.parse(textBlock.text); }
         catch { setStatus('status', 'err', '결과 JSON 파싱 실패. 다시 시도하세요.'); $('analyze').disabled = false; return; }
@@ -228,7 +292,7 @@
       }
     }
 
-    // schedule을 5×8로 정규화 (부족/초과 보정)
+    // schedule을 5×8로 정규화
     function normalize(sched) {
       const out = [];
       for (let d = 0; d < 5; d++) {
@@ -257,13 +321,12 @@
       table.innerHTML = head + rows;
     }
 
-    // 편집 표 → 배열
     function collectTable() {
       const out = Array.from({ length: 5 }, () => Array(PERIODS.length).fill(null));
       $('editTable').querySelectorAll('input').forEach(inp => {
         const d = Number(inp.dataset.d), p = Number(inp.dataset.p);
         const v = inp.value.trim();
-        out[d][p] = v ? v : null;
+        out[d][p] = v || null;
       });
       return out;
     }
@@ -271,14 +334,21 @@
     // ── 저장 ───────────────────────
     $('save').onclick = async () => {
       const schedule = collectTable();
-      const id = $('teacher').value;
       $('save').disabled = true;
       try {
-        await saveAiSchedule(id, schedule);
-        const t = TEACHERS.find(x => x.id === id);
-        setStatus('saveStatus', 'ok', `${t ? t.name : id} 선생님 시간표를 저장했습니다. 학생 화면에 반영됩니다.`);
+        if (currentMode === 'teacher') {
+          const id = $('teacher').value;
+          await saveAiSchedule(id, schedule);
+          const t = TEACHERS.find(x => x.id === id);
+          setStatus('saveStatus', 'ok', `${t ? t.name : id} 선생님 시간표를 저장했습니다. 학생 화면에 반영됩니다.`);
+        } else {
+          const grade = $('grade').value, classNum = $('classNum').value;
+          const classId = `${grade}-${classNum}`;
+          await saveClassAiSchedule(classId, schedule);
+          setStatus('saveStatus', 'ok', `${grade}학년 ${classNum}반 시간표를 저장했습니다. 반 시간표 화면에 반영됩니다.`);
+        }
       } catch {
-        setStatus('saveStatus', 'err', '저장에 실패했습니다. 다시 시도해주세요.');
+        setStatus('saveStatus', 'err', '저장에 실패했습니다. Supabase에 class_ai_schedules 테이블이 있는지 확인하세요.');
       } finally {
         $('save').disabled = false;
       }

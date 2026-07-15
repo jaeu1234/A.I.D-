@@ -4,9 +4,9 @@ import {
   getCurrentPeriodIndex, getNextPeriodIndex, getBreakAfterIndex, getTodayIndex,
   getLocalDateStr, getNowMins, toMins,
 } from './time.js';
-import { getOverridesCache, getAiSchedulesCache } from './sync.js';
+import { getOverridesCache, getAiSchedulesCache, getClassAiSchedulesCache } from './sync.js';
 
-export { initSync, addOverride, deleteOverride, saveAiSchedule } from './sync.js';
+export { initSync, addOverride, deleteOverride, saveAiSchedule, saveClassAiSchedule } from './sync.js';
 
 // ─────────────────────────────────────────────
 // Supabase 동기화 캐시 읽기
@@ -23,6 +23,11 @@ export function loadOverrides() {
 /** AI 분석으로 저장된 시간표 불러오기 */
 export function loadAiSchedules() {
   return getAiSchedulesCache();
+}
+
+/** 반 AI 시간표 불러오기 */
+export function loadClassAiSchedules() {
+  return getClassAiSchedulesCache();
 }
 
 // ─────────────────────────────────────────────
@@ -177,7 +182,33 @@ export function getClassSchedule(grade, classNum) {
       });
     });
   });
+
+  // 반 AI 시간표로 빈 칸 보완 (선생님 시간표에 없는 교시만 채운다)
+  const classAi = loadClassAiSchedules();
+  const entry = classAi[`${grade}-${classNum}`];
+  if (entry) {
+    for (let d = 0; d < 5; d++) {
+      for (let p = 0; p < PERIODS.length; p++) {
+        if (grid[d][p]) continue;
+        const cell = _parseClassScheduleCell(entry.schedule[d]?.[p]);
+        if (cell) grid[d][p] = cell;
+      }
+    }
+  }
+
   return grid;
+}
+
+/** "과목(선생님이름)" 형식 셀 파싱 (반 AI 시간표 전용) */
+function _parseClassScheduleCell(raw) {
+  if (!raw) return null;
+  const m = raw.match(/^(.+?)\((.+)\)$/);
+  if (m) {
+    const teacherName = m[2];
+    const teacher = TEACHERS.find(t => t.name === teacherName);
+    return { subject: m[1], teacherName, teacherId: teacher?.id ?? null, label: raw };
+  }
+  return { subject: raw, teacherName: '', teacherId: null, label: raw };
 }
 
 // ─────────────────────────────────────────────
