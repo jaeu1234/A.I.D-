@@ -206,15 +206,21 @@ function _drawFloor(ctx, occ = {}) {
     // (긴 이름이 옆 칸으로 넘쳐 겹쳐 보이던 "글씨 깨짐" 문제 해결)
     const cx = x + w / 2;
     if (type === 'hall') {
-      const fit = _fitLabel(ctx, label, w - 8, h - 6, Math.min(11, w / 5), 6.5, '');
-      _drawLines(ctx, fit, cx, y + h / 2, '', 'rgba(0,0,0,.28)');
+      // 전체 높이 div 방(계단 등, h>50)은 복도 구역(y≈100-118)을 피해 상단부 중앙에 라벨 배치.
+      const isDiv = h > 50;
+      const labelH  = isDiv ? 90 : h - 6;
+      const cyLabel = isDiv ? y + 50 : y + h / 2;
+      const fit = _fitLabel(ctx, label, w - 8, labelH, Math.min(11, w / 5), 6.5, '');
+      _drawLines(ctx, fit, cx, cyLabel, '', 'rgba(0,0,0,.28)');
     } else {
       // 선생님 핀/클러스터가 방 중앙~하단에 그려지므로, 점유된 방은 라벨을
       // 위쪽 영역에만 배치해 핀과 겹치지 않게 한다(빈 방은 방 전체 중앙).
+      // 전체 높이 div 방(화장실 등)은 복도 구역(y≈100-118) 위로 라벨을 제한한다.
       const occupied = (occ[room.id]?.length ?? 0) > 0;
       const padX   = Math.min(10, w * 0.14);
       const top    = y + 5;
-      const bottom = occupied ? y + h * 0.48 : y + h - 5;
+      const rawBottom = occupied ? y + h * 0.48 : y + h - 5;
+      const bottom = rawBottom > 100 && y < 100 ? y + 95 : rawBottom;
       const fit = _fitLabel(ctx, label, w - padX * 2, bottom - top, 13, 6.5, '500 ');
       _drawLines(ctx, fit, cx, (top + bottom) / 2, '500 ', 'rgba(0,0,0,.68)');
     }
