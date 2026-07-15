@@ -59,6 +59,31 @@ export function s2w(sx, sy) {
 // 카메라 제어
 // ─────────────────────────────────────────────
 
+const FIT_PAD = 40;   // 평면도와 화면 가장자리 사이 여백
+const MAX_ZOOM_X = 12; // fit 대비 최대 확대 배율
+
+/** 현재 층 평면도가 화면에 꽉 차는 배율 (= 최소 줌) */
+function _fitZoom() {
+  const floor = FLOORS[_currentFloor];
+  if (!floor || _CW < 10 || _CH < 10) return null;
+  return Math.min((_CW - FIT_PAD * 2) / floor.W, (_CH - FIT_PAD * 2) / floor.H);
+}
+
+/**
+ * 평면도가 화면 밖으로 빠져나가지 않도록 카메라를 가둔다.
+ * 평면도가 화면보다 작으면(축소 상태) 아예 중앙에 고정 → 줌이 항상 전개도 중앙에서
+ * 커졌다 작아진다. 확대 상태에서는 가장자리 너머 빈 공간이 보이지 않게 막는다.
+ */
+function _clampCamera() {
+  const floor = FLOORS[_currentFloor];
+  if (!floor || _CW < 10 || _CH < 10) return;
+  const halfW = _CW / (2 * _camZ), halfH = _CH / (2 * _camZ);
+  if (floor.W <= halfW * 2) _camX = floor.W / 2;
+  else _camX = Math.min(Math.max(_camX, halfW), floor.W - halfW);
+  if (floor.H <= halfH * 2) _camY = floor.H / 2;
+  else _camY = Math.min(Math.max(_camY, halfH), floor.H - halfH);
+}
+
 /** 평면도 전체가 화면에 꽉 차도록 카메라 리셋 */
 export function resetZoom() {
   const floor = FLOORS[_currentFloor];
@@ -72,8 +97,7 @@ export function resetZoom() {
   if (rect.width < 10 || rect.height < 10) return;
   _CW = rect.width;
   _CH = rect.height;
-  const PAD = 40;
-  _camZ = Math.min((_CW - PAD * 2) / floor.W, (_CH - PAD * 2) / floor.H);
+  _camZ = _fitZoom();
   _camX = floor.W / 2;
   _camY = floor.H / 2;
   render();
@@ -86,11 +110,18 @@ export function resetZoom() {
  * @param {number} sy     - 스크린 y
  */
 export function zoom(factor, sx = _CW / 2, sy = _CH / 2) {
+  // 축소 하한 = 평면도가 화면에 꽉 차는 배율.
+  // (예전엔 하한이 절대값 0.1이라 꽉 차는 크기보다 8배 넘게 축소돼 평면도가
+  //  좁쌀만 해졌고, 커서 기준 휠 줌과 겹쳐 구석으로 딸려가 보였다.)
+  const fit = _fitZoom();
   const before = s2w(sx, sy);
-  _camZ = Math.min(Math.max(_camZ * factor, 0.1), 10);
+  _camZ = fit != null
+    ? Math.min(Math.max(_camZ * factor, fit), fit * MAX_ZOOM_X)
+    : Math.min(Math.max(_camZ * factor, 0.1), 10);
   const after = s2w(sx, sy);
   _camX += before.x - after.x;
   _camY += before.y - after.y;
+  _clampCamera();
   render();
 }
 
@@ -98,6 +129,7 @@ export function zoom(factor, sx = _CW / 2, sy = _CH / 2) {
 export function pan(dx, dy) {
   _camX -= dx / _camZ;
   _camY -= dy / _camZ;
+  _clampCamera();
   render();
 }
 
@@ -108,9 +140,8 @@ export function pan(dx, dy) {
  */
 export function zoomToRoom(room, targetScale = 2.5) {
   if (!room) return;
-  const floor = FLOORS[_currentFloor];
-  const PAD   = 40;
-  const fitZ  = Math.min((_CW - PAD * 2) / floor.W, (_CH - PAD * 2) / floor.H);
+  const fitZ  = _fitZoom();
+  if (fitZ == null) return;
   const endZ  = fitZ * targetScale;
   const endX  = room.x + room.w / 2;
   const endY  = room.y + room.h / 2;
@@ -126,6 +157,7 @@ export function zoomToRoom(room, targetScale = 2.5) {
     _camX = sx + (endX - sx) * e;
     _camY = sy + (endY - sy) * e;
     _camZ = sz + (endZ - sz) * e;
+    _clampCamera(); // 가장자리 방으로 줌해도 평면도 밖 빈 공간이 보이지 않게
     render();
     if (p < 1) requestAnimationFrame(tick);
   }
