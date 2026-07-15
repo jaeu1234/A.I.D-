@@ -216,11 +216,16 @@ function _drawFloor(ctx, occ = {}) {
   // 건물 외벽 — 건물마다 따로 그린다.
   // (예전엔 층 전체를 사각형 하나로 감싸서 본관·상생문·경건관·신념관·체육관이
   //  한 건물처럼 보였다. 실제로는 운동장을 사이에 둔 별동이다.)
+  // ghost = 그 층이 없는 별동(예: 5층에서 본 체육관). 본관 층을 바꿔도 사라지지 않게
+  // 흐릿한 외벽만 남겨 학교 배치가 층마다 흔들리지 않도록 한다.
   (floor.buildings ?? []).forEach(b => {
+    ctx.save();
+    if (b.ghost) ctx.globalAlpha = 0.28;
     ctx.fillStyle = '#dddbd4';
     ctx.beginPath();
     ctx.roundRect(b.x - 10, b.y - 10, b.w + 20, b.h + 20, 14);
     ctx.fill();
+    ctx.restore();
   });
 
   // 방 그리기
@@ -258,13 +263,22 @@ function _drawFloor(ctx, occ = {}) {
     }
   });
 
-  // 건물 이름표 (외벽 위쪽 바깥) — 어느 건물인지 한눈에 구분되게
+  // 건물 이름표 (외벽 위쪽 바깥) — 어느 건물인지 한눈에 구분되게.
+  // ghost 건물은 이름도 흐리게 + 빈 외벽 가운데에 이름을 한 번 더 적어
+  // "저 자리에 있지만 지금 보는 층은 아니다"가 드러나게 한다.
   (floor.buildings ?? []).forEach(b => {
     ctx.font = '700 11px sans-serif';
-    ctx.fillStyle = 'rgba(0,0,0,.46)';
+    ctx.fillStyle = b.ghost ? 'rgba(0,0,0,.2)' : 'rgba(0,0,0,.46)';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
     ctx.fillText(b.name, b.x - 8, b.y - 13);
+    if (b.ghost) {
+      ctx.font = '600 12px sans-serif';
+      ctx.fillStyle = 'rgba(0,0,0,.22)';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(b.name, b.x + b.w / 2, b.y + b.h / 2);
+    }
   });
 }
 
