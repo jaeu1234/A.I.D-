@@ -181,11 +181,15 @@ function _drawFloor(ctx, occ = {}) {
   const floor = FLOORS[_currentFloor];
   if (!floor) return;
 
-  // 건물 외벽
-  ctx.fillStyle = '#dddbd4';
-  ctx.beginPath();
-  ctx.roundRect(-10, -10, floor.W + 20, floor.H + 20, 14);
-  ctx.fill();
+  // 건물 외벽 — 건물마다 따로 그린다.
+  // (예전엔 층 전체를 사각형 하나로 감싸서 본관·상생문·경건관·신념관·체육관이
+  //  한 건물처럼 보였다. 실제로는 운동장을 사이에 둔 별동이다.)
+  (floor.buildings ?? []).forEach(b => {
+    ctx.fillStyle = '#dddbd4';
+    ctx.beginPath();
+    ctx.roundRect(b.x - 10, b.y - 10, b.w + 20, b.h + 20, 14);
+    ctx.fill();
+  });
 
   // 방 그리기
   floor.rooms.forEach(room => {
@@ -214,6 +218,15 @@ function _drawFloor(ctx, occ = {}) {
       const fit = _fitLabel(ctx, label, w - padX * 2, bottom - top, 13, 6.5, '500 ');
       _drawLines(ctx, fit, cx, (top + bottom) / 2, '500 ', 'rgba(0,0,0,.68)');
     }
+  });
+
+  // 건물 이름표 (외벽 위쪽 바깥) — 어느 건물인지 한눈에 구분되게
+  (floor.buildings ?? []).forEach(b => {
+    ctx.font = '700 11px sans-serif';
+    ctx.fillStyle = 'rgba(0,0,0,.46)';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(b.name, b.x - 8, b.y - 13);
   });
 }
 

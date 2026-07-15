@@ -21,23 +21,38 @@ const C = {
   stair:   { fill: '#ece9e0', stroke: '#c9c6bb' }, // 계단
   toilet:  { fill: '#b3e5fc', stroke: '#4fc3f7' }, // 화장실
   hall:    { fill: '#f5f5f2', stroke: '#e0e0e0' }, // 복도
+  field:   { fill: '#d7efd2', stroke: '#a8d69f' }, // 운동장(실외)
 };
 const TYPE_OF = {
   g1:'class', g2:'class', g3:'class', office:'office', home:'special', lab2:'special',
   cafe:'special', special:'special', lab:'special', admin:'special', music:'special',
   counsel:'special', lib:'special', gym:'special', annex:'special', stair:'hall', toilet:'toilet',
-  hall:'hall',
+  hall:'hall', field:'field',
 };
 
 // ─────────────────────────────────────────────
 // 층 레이아웃 빌더
 // 방을 왼쪽부터 순서대로 배치(x 자동 계산). 위/아래 두 줄(top/bot)과 그 사이
-// 복도, 층 전체를 가르는 계단·화장실(div)로 구성. 별관은 abs로 절대 배치.
+// 복도, 층 전체를 가르는 계단·화장실(div)로 구성. 별동은 abs로 절대 배치.
+//
+// 건물(buildings)은 방과 별개로 관리한다 — map.js가 건물마다 외벽을 따로 그려야
+// 본관·상생문·경건관·신념관·체육관이 한 덩어리로 보이지 않는다.
 // ─────────────────────────────────────────────
 const TOP_H = 100, BOT_Y = 118, BOT_H = 100, FLOOR_H = 220;
 
+// ── 별동 건물 공통 좌표 ──────────────────────
+// 실제 배치(운동장을 사이에 두고 본관 북쪽 / 체육관 남서 / 경건관·신념관 동쪽)를
+// 축 정렬 개략도로 옮긴 것. 층이 바뀌어도 같은 건물이 같은 자리에 보이도록
+// 모든 층이 이 좌표를 공유한다.
+const YARD_Y = 300, YARD_H = 200;     // 본관 아래 별동 밴드
+const GYM_X   = 0,    GYM_W  = 180;   // 체육관 (남서·단층)
+const FIELD_X = 215,  FIELD_W = 600;  // 운동장 (실외)
+const GEON_X  = 875,  GEON_W = 120;   // 경건관 (동)
+const SIN_X   = 1015, SIN_W  = 120;   // 신념관 (동)
+
 function makeFloor(label) {
   const rooms = [];
+  const buildings = [];
   let tx = 0, bx = 0;
   const push = (id, l, x, y, w, h, ck) =>
     rooms.push({ id, label: l, x, y, w, h, ...C[ck], type: TYPE_OF[ck] });
@@ -52,10 +67,12 @@ function makeFloor(label) {
     abs(id, l, x, y, w, h, ck) { push(id, l, x, y, w, h, ck); return api; },
     at() { return Math.max(tx, bx); },
     corridor(id, x0, x1) { push(id, '복도', x0, 100, x1 - x0, 18, 'hall'); return api; },
+    /** 건물 외벽 하나를 등록 (map.js가 건물별로 따로 그린다) */
+    building(name, x, y, w, h) { buildings.push({ name, x, y, w, h }); return api; },
     build() {
       const W = Math.max(...rooms.map(r => r.x + r.w));
       const H = Math.max(FLOOR_H, ...rooms.map(r => r.y + r.h));
-      return { W, H, label, rooms };
+      return { W, H, label, rooms, buildings };
     },
   };
   return api;
@@ -66,6 +83,30 @@ function annexRow(api, x0, y, h, list) {
   let x = x0;
   list.forEach(([id, l, w, ck]) => { api.abs(id, l, x, y, w, h, ck); x += w; });
   return x;
+}
+
+/** 본관 외벽 등록 (0 ~ 현재 끝까지) → 상생문 별관 시작 x 반환 */
+function sealMain(f) {
+  const w = f.at();
+  f.building('본관', 0, 0, w, FLOOR_H);
+  return w + 38; // 상생문은 본관 동쪽 끝에 붙어 돌출
+}
+
+/** 상생문 별관 외벽 등록 (두 줄의 끝 중 더 먼 쪽까지) */
+function sealAnnex(f, ax, end) {
+  f.building('상생문', ax, 0, end - ax, FLOOR_H);
+}
+
+/** 경건관 한 층 (모든 층 같은 자리) */
+function addGyeongeon(f, id, label) {
+  f.abs(id, label, GEON_X, YARD_Y, GEON_W, YARD_H, 'annex');
+  f.building('경건관', GEON_X, YARD_Y, GEON_W, YARD_H);
+}
+
+/** 신념관 한 층 (모든 층 같은 자리) */
+function addSinnyeom(f, id, label) {
+  f.abs(id, label, SIN_X, YARD_Y, SIN_W, YARD_H, 'gym');
+  f.building('신념관', SIN_X, YARD_Y, SIN_W, YARD_H);
 }
 
 // ─────────────────────────────────────────────
@@ -90,10 +131,11 @@ function build5() {
   const rx = f.at();
   f.corridor('hall5', lx, rx);
   f.div('stair5R', '계단', 40, 'stair').div('toilet5R', '화장실', 48, 'toilet');
-  // 상생문 별관
-  const ax = f.at() + 38;
-  annexRow(f, ax, 0,     100, [['pray-room', '기도실', 70, 'annex'], ['inst-storage2', '악기창고2', 70, 'annex'], ['music2', '음악실2', 70, 'music']]);
-  annexRow(f, ax, BOT_Y, 100, [['club-room', '동아리실', 62, 'annex'], ['prep-room5', '준비실', 62, 'annex'], ['music1', '음악실1', 62, 'music'], ['inst-storage1', '악기창고1', 62, 'annex']]);
+  // 상생문 별관 (본관 동쪽 끝에서 돌출)
+  const ax = sealMain(f);
+  const e1 = annexRow(f, ax, 0,     100, [['pray-room', '기도실', 70, 'annex'], ['inst-storage2', '악기창고2', 70, 'annex'], ['music2', '음악실2', 70, 'music']]);
+  const e2 = annexRow(f, ax, BOT_Y, 100, [['club-room', '동아리실', 62, 'annex'], ['prep-room5', '준비실', 62, 'annex'], ['music1', '음악실1', 62, 'music'], ['inst-storage1', '악기창고1', 62, 'annex']]);
+  sealAnnex(f, ax, Math.max(e1, e2));
   return f.build();
 }
 
@@ -112,9 +154,10 @@ function build4() {
   const rx = f.at();
   f.corridor('hall4', lx, rx);
   f.div('stair4R', '계단', 40, 'stair').div('toilet4R', '화장실', 48, 'toilet');
-  const ax = f.at() + 38;
-  annexRow(f, ax, 0,     100, [['resource-room', '리소스실', 78, 'annex'], ['jangyoungsil', '장영실실', 130, 'annex']]);
-  annexRow(f, ax, BOT_Y, 100, [['heojun-lab', '허준실험실', 66, 'annex'], ['pe-lab', '예체능교과연구실', 66, 'lab2'], ['prep-room4', '준비실', 50, 'annex'], ['sejong-room', '세종대왕실', 60, 'annex']]);
+  const ax = sealMain(f);
+  const e1 = annexRow(f, ax, 0,     100, [['resource-room', '리소스실', 78, 'annex'], ['jangyoungsil', '장영실실', 130, 'annex']]);
+  const e2 = annexRow(f, ax, BOT_Y, 100, [['heojun-lab', '허준실험실', 66, 'annex'], ['pe-lab', '예체능교과연구실', 66, 'lab2'], ['prep-room4', '준비실', 50, 'annex'], ['sejong-room', '세종대왕실', 60, 'annex']]);
+  sealAnnex(f, ax, Math.max(e1, e2));
   return f.build();
 }
 
@@ -135,11 +178,12 @@ function build3() {
   const rx = f.at();
   f.corridor('hall3', lx, rx);
   f.div('stair3R', '계단', 40, 'stair').div('toilet3R', '화장실', 48, 'toilet');
-  const ax = f.at() + 38;
-  annexRow(f, ax, 0,     100, [['earth-lab', '지학실', 90, 'lab'], ['physics-lab', '물리실', 90, 'lab']]);
-  annexRow(f, ax, BOT_Y, 100, [['chem-lab', '화학실', 60, 'lab'], ['sci-lab', '과학교과연구실', 90, 'lab2'], ['bio-lab', '생명과학실', 80, 'lab']]);
-  // 경건관 3층 (상생문 별관 오른쪽 끝 뒤에 배치 — 겹침 방지)
-  f.abs('gyeongeon-3f', '경건관 3층 자습실', ax + 260, 0, 90, FLOOR_H, 'annex');
+  const ax = sealMain(f);
+  const e1 = annexRow(f, ax, 0,     100, [['earth-lab', '지학실', 90, 'lab'], ['physics-lab', '물리실', 90, 'lab']]);
+  const e2 = annexRow(f, ax, BOT_Y, 100, [['chem-lab', '화학실', 60, 'lab'], ['sci-lab', '과학교과연구실', 90, 'lab2'], ['bio-lab', '생명과학실', 80, 'lab']]);
+  sealAnnex(f, ax, Math.max(e1, e2));
+  // 경건관 3층 — 운동장 건너 동쪽 별동
+  addGyeongeon(f, 'gyeongeon-3f', '경건관 자습실');
   return f.build();
 }
 
@@ -157,21 +201,19 @@ function build2() {
   const rx = f.at();
   f.corridor('hall2', lx, rx);
   f.div('stair2R', '계단', 40, 'stair').div('toilet2R', '학생화장실(교사·학생)', 70, 'toilet');
-  // 별관(창의인성·미술 등)
-  const ax = f.at() + 38;
-  annexRow(f, ax, 0,     100, [['creative-room', '창의인성지도실', 66, 'counsel'], ['cpr-room', '심폐소생교육', 66, 'special'], ['art-room2a', '미술교과실', 60, 'special']]);
-  annexRow(f, ax, BOT_Y, 100, [['lounge2', '휴게실', 66, 'special'], ['prep-room2', '준비실', 66, 'special'], ['art-room2b', '미술교과실', 60, 'special']]);
-  // 경건관·신념관 2층
-  f.abs('gyeongeon-2f', '경건관 2층 설렘ON실', ax + 200, 0, 90, FLOOR_H, 'annex');
-  f.abs('sinnyeom-2f', '신념관 2층 강당', ax + 290, 0, 90, FLOOR_H, 'gym');
+  // 상생문 별관(창의인성·미술 등)
+  const ax = sealMain(f);
+  const e1 = annexRow(f, ax, 0,     100, [['creative-room', '창의인성지도실', 66, 'counsel'], ['cpr-room', '심폐소생교육', 66, 'special'], ['art-room2a', '미술교과실', 60, 'special']]);
+  const e2 = annexRow(f, ax, BOT_Y, 100, [['lounge2', '휴게실', 66, 'special'], ['prep-room2', '준비실', 66, 'special'], ['art-room2b', '미술교과실', 60, 'special']]);
+  sealAnnex(f, ax, Math.max(e1, e2));
+  // 경건관·신념관 2층 — 운동장 건너 동쪽 별동 2개
+  addGyeongeon(f, 'gyeongeon-2f', '경건관 설렘ON실');
+  addSinnyeom(f, 'sinnyeom-2f', '신념관 강당');
   return f.build();
 }
 
 function build1() {
   const f = makeFloor('1층');
-  // 운동장 서쪽의 별도 건물 (1층 단층 체육관) — 실제 체육 수업 장소.
-  f.abs('gymnasium', '체육관', 0, 0, 140, FLOOR_H, 'gym');
-  f.tgap(170).bgap(170); // 체육관과 본관 사이 간격(운동장)
   f.div('stair1L', '계단', 40, 'stair').div('toilet1L', '화장실', 46, 'toilet');
   const lx = f.at();
   f.top('night-duty', '숙직실', 90, 'admin').top('doc-room1', '문서보관실(행)', 90, 'admin');
@@ -188,21 +230,28 @@ function build1() {
   const rx = f.at();
   f.corridor('hall1', lx, rx);
   f.div('stair1R', '계단', 40, 'stair').div('toilet1R', '화장실', 48, 'toilet');
-  // 창고·인쇄실
-  const ax = f.at() + 30;
+  // 상생문 별관 1층 — 창고·인쇄실
+  const ax = sealMain(f);
   f.abs('storage1', '창고', ax, 0, 90, 100, 'special');
   f.abs('print-room', '인쇄실', ax, BOT_Y, 90, 100, 'special');
-  // 경건관·신념관 1층
-  f.abs('gyeongeon-1f', '경건관 1층 자습실', ax + 120, 0, 90, FLOOR_H, 'annex');
-  f.abs('sinnyeom-1f', '신념관 1층 식당', ax + 210, 0, 90, FLOOR_H, 'gym');
+  sealAnnex(f, ax, ax + 90);
+  // ── 별동 3개 + 운동장 (1층에만 존재) ──
+  // 체육관: 본관 남서쪽 단층 별동 (실제 체육 수업 장소)
+  f.abs('gymnasium', '체육관', GYM_X, YARD_Y, GYM_W, YARD_H, 'gym');
+  f.building('체육관', GYM_X, YARD_Y, GYM_W, YARD_H);
+  // 운동장: 실외 — 건물이 아니므로 외벽 없이 바닥만 그린다
+  f.abs('field', '운동장', FIELD_X, YARD_Y, FIELD_W, YARD_H, 'field');
+  addGyeongeon(f, 'gyeongeon-1f', '경건관 자습실');
+  addSinnyeom(f, 'sinnyeom-1f', '신념관 식당');
   return f.build();
 }
 
 function build0() {
   const f = makeFloor('지하');
-  // 지하는 경건관·신념관만 (본관 지하는 시간표 대상 아님)
-  f.abs('gyeongeon-b', '경건관 지하 체육공간·문화공간', 0, 0, 130, 200, 'annex');
-  f.abs('sinnyeom-b', '신념관 지하 식당', 150, 0, 100, 200, 'gym');
+  // 지하는 경건관·신념관만 (본관 지하는 시간표 대상 아님).
+  // 위층과 같은 자리에 두어 층을 오갈 때 건물 위치가 흔들리지 않게 한다.
+  addGyeongeon(f, 'gyeongeon-b', '경건관 체육공간·문화공간');
+  addSinnyeom(f, 'sinnyeom-b', '신념관 식당');
   return f.build();
 }
 
