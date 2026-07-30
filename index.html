@@ -289,7 +289,7 @@
       <div class="ip-handle"></div>
       <button class="ip-close" id="ipClose" aria-label="닫기">✕</button>
       <div class="info-panel-body" id="infoPanelBody">
-        <div class="info-empty">선생님을 선택하면<br>현재 위치와 동선이 표시됩니다.</div>
+        <div class="info-empty">선생님을 선택하면<br>현재 위치와 시간표가 표시됩니다.</div>
       </div>
     </aside>
   </div>
@@ -403,7 +403,7 @@
 
     function renderEmptyInfo() {
       $('infoPanelBody').innerHTML = viewMode === 'teacher'
-        ? '<div class="info-empty">선생님을 선택하면<br>현재 위치와 동선이 표시됩니다.</div>'
+        ? '<div class="info-empty">선생님을 선택하면<br>현재 위치와 시간표가 표시됩니다.</div>'
         : '<div class="info-empty">반을 선택하면<br>주간 시간표가 표시됩니다.</div>';
       closeInfoSheet();
     }
@@ -629,7 +629,7 @@
     function renderInfo() {
       const panel = $('infoPanelBody');
       const t = TEACHERS.find(x => x.id === selectedId);
-      if (!t) { panel.innerHTML = '<div class="info-empty">선생님을 선택하면<br>현재 위치와 동선이 표시됩니다.</div>'; return; }
+      if (!t) { panel.innerHTML = '<div class="info-empty">선생님을 선택하면<br>현재 위치와 시간표가 표시됩니다.</div>'; return; }
 
       const day = getTodayIndex();
       const pi  = getCurrentPeriodIndex();
