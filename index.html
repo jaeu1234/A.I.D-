@@ -180,14 +180,72 @@
     .class-table .sub-teacher { display: block; font-size: 9.5px; color: var(--muted); margin-top: 2px; }
     .class-note { padding: 0 18px 18px; font-size: 11px; color: var(--muted); line-height: 1.5; }
 
+    /* ── 모바일 전용 컨트롤 (데스크톱에선 항상 숨김) ── */
+    .menu-btn, .sidebar-backdrop, .ip-handle, .ip-close { display: none; }
+    .menu-btn {
+      width: 34px; height: 34px; flex-shrink: 0; border: none; border-radius: 9px;
+      background: #f2f3f8; color: var(--text); font-size: 17px; cursor: pointer;
+    }
+    .menu-btn:active { background: #e7e9f3; }
+
     @media (max-width: 860px) {
-      .sidebar { display: none; }
-      .info-panel { width: 270px; }
+      header { gap: 10px; padding: 10px 14px; flex-wrap: wrap; }
+      header h1 { font-size: 15px; }
+      header .period-badge { margin-left: 0; }
+      header .clock { margin-left: auto; }
+      .menu-btn { display: inline-flex; align-items: center; justify-content: center; }
+
+      /* 좌측 목록 → 슬라이드 인 드로어 */
+      .sidebar {
+        position: fixed; top: 0; left: 0; bottom: 0; z-index: 60;
+        width: 82vw; max-width: 300px;
+        transform: translateX(-100%);
+        transition: transform .25s ease;
+        box-shadow: var(--shadow-md);
+      }
+      .sidebar.open { transform: translateX(0); }
+      .sidebar-backdrop {
+        display: block; position: fixed; inset: 0; z-index: 55;
+        background: rgba(16,24,40,.35); opacity: 0; pointer-events: none;
+        transition: opacity .2s ease;
+      }
+      .sidebar-backdrop.show { opacity: 1; pointer-events: auto; }
+
+      /* 층 탭 가로 스크롤 */
+      .floor-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+      .floor-tabs::-webkit-scrollbar { display: none; }
+      .floor-tabs button { flex-shrink: 0; }
+
+      /* 우측 정보 패널 → 하단 바텀시트 */
+      .info-panel {
+        position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+        width: 100%; max-width: none; max-height: 62vh;
+        border-left: none; border-top: 1px solid var(--line);
+        border-radius: 16px 16px 0 0;
+        box-shadow: 0 -8px 24px rgba(16,24,40,.16);
+        transform: translateY(100%);
+        transition: transform .25s ease;
+      }
+      .info-panel.open { transform: translateY(0); }
+      .ip-handle {
+        display: block; width: 38px; height: 4px; border-radius: 3px;
+        background: var(--line); margin: 10px auto 0; flex-shrink: 0;
+      }
+      .ip-close {
+        display: flex; position: absolute; top: 8px; right: 10px; z-index: 1;
+        width: 30px; height: 30px; align-items: center; justify-content: center;
+        border: none; border-radius: 50%; background: #f2f3f8; color: var(--muted);
+        font-size: 15px; cursor: pointer;
+      }
+      .info-panel-body { overflow-y: auto; position: relative; }
+      .info-panel .info-head { padding-top: 22px; }
+      .info-empty { padding: 30px 24px; }
     }
   </style>
 </head>
 <body>
   <header>
+    <button class="menu-btn" id="menuBtn" aria-label="목록 열기">☰</button>
     <h1>📍 선생님 위치 안내</h1>
     <nav class="topnav">
       <a href="index.html" class="active">학생</a>
@@ -199,8 +257,10 @@
   </header>
 
   <div class="layout">
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
     <!-- 좌측: 선생님/반 목록 -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div class="mode-tabs">
         <button class="active" id="modeTeacherBtn">선생님</button>
         <button id="modeClassBtn">반</button>
@@ -224,9 +284,13 @@
       </div>
     </div>
 
-    <!-- 우측: 정보 패널 -->
+    <!-- 우측(모바일: 하단 시트) 정보 패널 -->
     <aside class="info-panel" id="infoPanel">
-      <div class="info-empty">선생님을 선택하면<br>현재 위치와 동선이 표시됩니다.</div>
+      <div class="ip-handle"></div>
+      <button class="ip-close" id="ipClose" aria-label="닫기">✕</button>
+      <div class="info-panel-body" id="infoPanelBody">
+        <div class="info-empty">선생님을 선택하면<br>현재 위치와 동선이 표시됩니다.</div>
+      </div>
     </aside>
   </div>
 
@@ -338,10 +402,24 @@
     }
 
     function renderEmptyInfo() {
-      $('infoPanel').innerHTML = viewMode === 'teacher'
+      $('infoPanelBody').innerHTML = viewMode === 'teacher'
         ? '<div class="info-empty">선생님을 선택하면<br>현재 위치와 동선이 표시됩니다.</div>'
         : '<div class="info-empty">반을 선택하면<br>주간 시간표가 표시됩니다.</div>';
+      closeInfoSheet();
     }
+
+    // ── 모바일: 좌측 목록 드로어 ───────
+    function openSidebar()  { $('sidebar').classList.add('open'); $('sidebarBackdrop').classList.add('show'); }
+    function closeSidebar() { $('sidebar').classList.remove('open'); $('sidebarBackdrop').classList.remove('show'); }
+    $('menuBtn').onclick = () => {
+      $('sidebar').classList.contains('open') ? closeSidebar() : openSidebar();
+    };
+    $('sidebarBackdrop').onclick = closeSidebar;
+
+    // ── 모바일: 하단 정보 시트 ─────────
+    function openInfoSheet()  { $('infoPanel').classList.add('open'); }
+    function closeInfoSheet() { $('infoPanel').classList.remove('open'); }
+    $('ipClose').onclick = closeInfoSheet;
 
     $('search').addEventListener('input', e => renderList(e.target.value));
 
@@ -390,6 +468,7 @@
 
     // ── 반 선택 ───────────────────────
     function selectClass(grade, classNum) {
+      closeSidebar();
       selectedClass = { grade, classNum };
       buildClassList($('search').value);
 
@@ -405,11 +484,12 @@
       }
 
       renderClassInfo(grade, classNum);
+      openInfoSheet();
     }
 
     // ── 반 시간표 렌더 ────────────────
     function renderClassInfo(grade, classNum) {
-      const panel = $('infoPanel');
+      const panel = $('infoPanelBody');
       const sched = getClassSchedule(grade, classNum);
 
       const head = '<tr><th>교시</th>' + DAYS.map(d => `<th>${d}</th>`).join('') + '</tr>';
@@ -511,6 +591,7 @@
 
     // ── 선생님 선택 ───────────────────
     function selectTeacher(id) {
+      closeSidebar();
       // 반 모드에서 지도 핀을 클릭해 선생님을 선택한 경우 선생님 모드로 전환
       if (viewMode !== 'teacher') {
         viewMode = 'teacher';
@@ -541,11 +622,12 @@
 
       renderInfo();
       startRouteAnim();
+      openInfoSheet();
     }
 
     // ── 정보 패널 렌더 ────────────────
     function renderInfo() {
-      const panel = $('infoPanel');
+      const panel = $('infoPanelBody');
       const t = TEACHERS.find(x => x.id === selectedId);
       if (!t) { panel.innerHTML = '<div class="info-empty">선생님을 선택하면<br>현재 위치와 동선이 표시됩니다.</div>'; return; }
 
@@ -618,27 +700,72 @@
       zoom(factor, e.clientX - rect.left, e.clientY - rect.top);
     }, { passive: false });
 
-    // 드래그 패닝 & 클릭 판정
+    // 드래그 패닝 · 두 손가락 핀치 줌 · 탭 클릭 판정
     let dragging = false, moved = false, lastX = 0, lastY = 0;
+    const activePointers = new Map(); // 터치 중인 모든 포인터(핀치 감지용)
+    let pinchState = null; // { prevDist, prevMidX, prevMidY }
+
     canvas.addEventListener('pointerdown', e => {
-      dragging = true; moved = false; lastX = e.clientX; lastY = e.clientY;
       canvas.setPointerCapture(e.pointerId);
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (activePointers.size === 2) {
+        // 핀치 시작: 단일 드래그는 중단하고 두 손가락 거리·중점을 기준으로 삼는다.
+        dragging = false;
+        const [p1, p2] = [...activePointers.values()];
+        pinchState = {
+          prevDist: Math.hypot(p2.x - p1.x, p2.y - p1.y),
+          prevMidX: (p1.x + p2.x) / 2,
+          prevMidY: (p1.y + p2.y) / 2,
+        };
+      } else if (activePointers.size === 1) {
+        dragging = true; moved = false; lastX = e.clientX; lastY = e.clientY;
+      }
     });
     canvas.addEventListener('pointermove', e => {
+      if (!activePointers.has(e.pointerId)) return;
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (activePointers.size >= 2) {
+        const [p1, p2] = [...activePointers.values()];
+        const rect = canvas.getBoundingClientRect();
+        const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        const midX = (p1.x + p2.x) / 2, midY = (p1.y + p2.y) / 2;
+        if (pinchState) {
+          const dx = midX - pinchState.prevMidX, dy = midY - pinchState.prevMidY;
+          if (dx || dy) pan(dx, dy);
+          const factor = dist / pinchState.prevDist;
+          if (Number.isFinite(factor) && factor > 0) zoom(factor, midX - rect.left, midY - rect.top);
+        }
+        pinchState = { prevDist: dist, prevMidX: midX, prevMidY: midY };
+        return;
+      }
+
       if (!dragging) return;
       const dx = e.clientX - lastX, dy = e.clientY - lastY;
       if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
       pan(dx, dy);
       lastX = e.clientX; lastY = e.clientY;
     });
-    canvas.addEventListener('pointerup', e => {
-      dragging = false;
-      if (!moved) {
-        const rect = canvas.getBoundingClientRect();
-        const id = hitTestPin(e.clientX - rect.left, e.clientY - rect.top);
-        if (id) selectTeacher(id);
+
+    function endPointer(e) {
+      activePointers.delete(e.pointerId);
+      if (activePointers.size < 2) pinchState = null;
+      if (activePointers.size === 1) {
+        // 손가락 하나가 남으면 그 지점부터 드래그를 이어간다(탭으로 오인하지 않게 moved=true).
+        const p = [...activePointers.values()][0];
+        dragging = true; moved = true; lastX = p.x; lastY = p.y;
+      } else if (activePointers.size === 0) {
+        dragging = false;
+        if (!moved) {
+          const rect = canvas.getBoundingClientRect();
+          const id = hitTestPin(e.clientX - rect.left, e.clientY - rect.top);
+          if (id) selectTeacher(id);
+        }
       }
-    });
+    }
+    canvas.addEventListener('pointerup', endPointer);
+    canvas.addEventListener('pointercancel', endPointer);
 
     // 줌 버튼
     $('zoomIn').onclick  = () => zoom(1.3);
