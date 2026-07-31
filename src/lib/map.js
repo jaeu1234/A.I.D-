@@ -261,7 +261,7 @@ function _drawFloor(ctx, occ = {}) {
       const isDiv = h > 50;
       const labelH  = isDiv ? 90 : h - 6;
       const cyLabel = isDiv ? y + 50 : y + h / 2;
-      const fit = _fitLabel(ctx, label, w - 8, labelH, Math.min(11, w / 5), 6.5, '');
+      const fit = _fitLabelCached(ctx, `hall:${room.id}`, label, w - 8, labelH, Math.min(11, w / 5), 6.5, '');
       _drawLines(ctx, fit, cx, cyLabel, '', 'rgba(0,0,0,.28)');
     } else {
       // 선생님 핀/클러스터가 방 중앙~하단에 그려지므로, 점유된 방은 라벨을
@@ -272,7 +272,7 @@ function _drawFloor(ctx, occ = {}) {
       const top    = y + 5;
       const rawBottom = occupied ? y + h * 0.48 : y + h - 5;
       const bottom = rawBottom > 100 && y < 100 ? y + 95 : rawBottom;
-      const fit = _fitLabel(ctx, label, w - padX * 2, bottom - top, 13, 6.5, '500 ');
+      const fit = _fitLabelCached(ctx, `${room.id}:${occupied}`, label, w - padX * 2, bottom - top, 13, 6.5, '500 ');
       _drawLines(ctx, fit, cx, (top + bottom) / 2, '500 ', 'rgba(0,0,0,.68)');
     }
   });
@@ -316,6 +316,24 @@ function _wrapText(ctx, text, maxW) {
   }
   if (line) lines.push(line);
   return lines;
+}
+
+/**
+ * _fitLabel 결과 캐시. 방 크기·라벨은 FLOORS 데이터가 고정이라 세션 내내 안 바뀌고,
+ * 점유 여부(occupied)만 두 가지 경우로 갈리므로, 호출부에서 만든 키(room.id 기반)로
+ * 캐시하면 매 렌더마다(특히 패닝·휠줌처럼 스로틀 없이 프레임마다 호출되는 경로에서)
+ * 글자 단위 measureText를 반복하지 않아도 된다. 캐시는 페이지 생애주기 내내 유효하며
+ * 무효화가 필요 없다(층 데이터가 런타임에 바뀌지 않으므로).
+ */
+const _labelFitCache = new Map();
+
+function _fitLabelCached(ctx, key, text, maxW, maxH, maxFont, minFont, weight) {
+  let fit = _labelFitCache.get(key);
+  if (!fit) {
+    fit = _fitLabel(ctx, text, maxW, maxH, maxFont, minFont, weight);
+    _labelFitCache.set(key, fit);
+  }
+  return fit;
 }
 
 /**
