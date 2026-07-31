@@ -44,6 +44,27 @@ export function buildSchedule(rawRows) {
   return rawRows.map(row => row.map(parseClassLabel));
 }
 
+/**
+ * "과목(선생님이름)" 형식 셀 파싱 (반 AI 시간표 전용).
+ * 괄호를 그리디하게 앞에서부터 잡으면 과목명에 괄호가 섞인 경우
+ * (예: '국어(문학)(홍길동)') 선생님 이름 자리가 어긋난다. 마지막
+ * '(괄호 없는 내용)'만 선생님 이름으로 잡도록 앵커링한다.
+ * TEACHERS를 참조하므로 이 파일에 둔다(location.js는 sync.js를 거쳐
+ * Supabase 클라이언트를 불러오는 무거운 모듈이라, 순수 파싱 로직을 여기
+ * 두면 테스트에서 네트워크 의존 없이 바로 import해 검증할 수 있다).
+ * @returns {{subject:string, teacherName:string, teacherId:string|null, label:string} | null}
+ */
+export function parseClassScheduleCell(raw) {
+  if (!raw) return null;
+  const m = raw.match(/^(.+)\(([^()]+)\)$/);
+  if (m) {
+    const teacherName = m[2];
+    const teacher = TEACHERS.find(t => t.name === teacherName);
+    return { subject: m[1], teacherName, teacherId: teacher?.id ?? null, label: raw };
+  }
+  return { subject: raw, teacherName: '', teacherId: null, label: raw };
+}
+
 // ─────────────────────────────────────────────
 // 선생님 기본 시간표
 // schedule[요일(0=월)][교시(0=1교시)] = ClassCell | null

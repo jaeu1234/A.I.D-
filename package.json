@@ -1,0 +1,8 @@
+{
+  "name": "teacher-map",
+  "private": true,
+  "description": "선생님 위치 안내 시스템 — 빌드 도구 없이 정적 파일 그대로 서빙됨. 이 package.json은 npm install 대상이 아니라 Dependabot 등 자동 취약점 스캔이 CDN(esm.sh)에서 고정 버전으로 불러오는 패키지를 추적할 수 있게 하기 위한 것. 버전을 올리면 src/lib/supabaseClient.js의 esm.sh import URL도 반드시 같이 맞춰야 함.",
+  "dependencies": {
+    "@supabase/supabase-js": "2.111.0"
+  }
+}

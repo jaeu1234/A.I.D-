@@ -6,18 +6,21 @@ export function toMins(t) {
   return h * 60 + m;
 }
 
-/** 현재 시각 → 분 수 */
-export function getNowMins() {
-  const n = new Date();
-  return n.getHours() * 60 + n.getMinutes();
+/**
+ * 현재 시각 → 분 수
+ * @param {Date} [now] - 생략하면 실제 현재 시각. 테스트에서 특정 시각을 고정하는 데 사용.
+ */
+export function getNowMins(now = new Date()) {
+  return now.getHours() * 60 + now.getMinutes();
 }
 
 /**
  * 현재 진행 중인 교시 인덱스
+ * @param {Date} [now]
  * @returns {number} 0~7 | -1(쉬는시간·방과후)
  */
-export function getCurrentPeriodIndex() {
-  const m = getNowMins();
+export function getCurrentPeriodIndex(now = new Date()) {
+  const m = getNowMins(now);
   for (let i = 0; i < PERIODS.length; i++) {
     if (m >= toMins(PERIODS[i].start) && m < toMins(PERIODS[i].end)) return i;
   }
@@ -26,10 +29,11 @@ export function getCurrentPeriodIndex() {
 
 /**
  * 다음 교시 인덱스
+ * @param {Date} [now]
  * @returns {number} 0~7 | -1(방과후)
  */
-export function getNextPeriodIndex() {
-  const m = getNowMins();
+export function getNextPeriodIndex(now = new Date()) {
+  const m = getNowMins(now);
   for (let i = 0; i < PERIODS.length; i++) {
     if (toMins(PERIODS[i].start) > m) return i;
   }
@@ -38,10 +42,11 @@ export function getNextPeriodIndex() {
 
 /**
  * 현재 쉬는시간이라면 몇 교시 '후' 쉬는시간인지 반환
+ * @param {Date} [now]
  * @returns {number} 교시 인덱스 | -1(쉬는시간 아님)
  */
-export function getBreakAfterIndex() {
-  const m = getNowMins();
+export function getBreakAfterIndex(now = new Date()) {
+  const m = getNowMins(now);
   for (let i = 0; i < PERIODS.length - 1; i++) {
     const end   = toMins(PERIODS[i].end);
     const start = toMins(PERIODS[i + 1].start);
@@ -56,19 +61,21 @@ export function getBreakAfterIndex() {
  * 정책: 주말(토·일)에는 월요일(0) 시간표를 기준으로 고정 표시한다 — 의도된 동작.
  * 학교가 쉬는 날에도 화면이 완전히 비어 보이지 않고, 다음 등교일인 월요일 기준
  * 위치를 미리 보여주기 위함. 주말 여부 자체는 isWeekend()로 별도 확인한다.
+ * @param {Date} [now]
  */
-export function getTodayIndex() {
-  const day = new Date().getDay(); // 0=일 ~ 6=토
+export function getTodayIndex(now = new Date()) {
+  const day = now.getDay(); // 0=일 ~ 6=토
   if (day === 0 || day === 6) return 0; // 주말은 월요일(0) 시간표로 고정
   return day - 1;
 }
 
 /**
  * 오늘이 주말(토·일)인지 여부
+ * @param {Date} [now]
  * @returns {boolean}
  */
-export function isWeekend() {
-  const day = new Date().getDay();
+export function isWeekend(now = new Date()) {
+  const day = now.getDay();
   return day === 0 || day === 6;
 }
 
