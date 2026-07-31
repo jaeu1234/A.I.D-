@@ -50,9 +50,31 @@
     table.edit input:focus { background:#eef2ff; }
     .hidden { display:none; }
     .hint { color:var(--muted); font-size:12px; margin-bottom:10px; }
+
+    /* PIN 게이트 */
+    .gate { max-width:340px; margin:80px auto; background:var(--panel); border:1px solid var(--line);
+      border-radius:14px; padding:32px 28px; text-align:center; }
+    .gate h2 { font-size:18px; margin-bottom:6px; }
+    .gate p { color:var(--muted); font-size:13px; margin-bottom:18px; }
+    .gate input { width:100%; padding:11px; font-size:18px; text-align:center; letter-spacing:6px;
+      border:1px solid var(--line); border-radius:9px; outline:none; }
+    .gate input:focus { border-color:var(--accent); }
+    .gate button { width:100%; margin-top:14px; padding:11px; font-size:15px; font-weight:600;
+      background:var(--accent); color:#fff; border:none; border-radius:9px; cursor:pointer; }
+    .gate .err { color:#c0392b; font-size:13px; margin-top:10px; min-height:18px; }
   </style>
 </head>
 <body>
+  <!-- PIN 게이트 -->
+  <div class="gate" id="gate">
+    <h2>🔒 관리자 인증</h2>
+    <p>시간표 업로드는 PIN이 필요합니다.</p>
+    <input type="password" id="pin" inputmode="numeric" placeholder="••••" maxlength="8" autocomplete="off" />
+    <button id="pinBtn">입장</button>
+    <div class="err" id="pinErr"></div>
+  </div>
+
+  <div id="app" class="hidden">
   <nav>
     <a href="index.html">📍 학생 화면</a>
     <a href="admin.html">🔒 관리자</a>
@@ -118,6 +140,7 @@
       <div class="status" id="saveStatus"></div>
     </div>
   </div>
+  </div>
 
   <script type="module">
     import { TEACHERS, PERIODS, DAYS } from './src/data/schedule.js';
@@ -128,6 +151,38 @@
 
     let imageB64 = null, imageMime = null, parsed = null;
     let currentMode = 'teacher'; // 'teacher' | 'class'
+
+    // 게이트를 통과한 PIN. 실제 저장 권한은 이 값 자체가 아니라 매 저장 요청마다
+    // /api/admin-write가 서버에서 다시 검증하는 데서 나온다.
+    let adminPin = null;
+
+    // ── PIN 게이트 ──────────────────
+    async function tryPin() {
+      const candidate = $('pin').value;
+      $('pinBtn').disabled = true;
+      try {
+        const res = await fetch('/api/verify-pin', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ pin: candidate }),
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          adminPin = candidate;
+          $('gate').classList.add('hidden');
+          $('app').classList.remove('hidden');
+        } else {
+          $('pinErr').textContent = data.error || 'PIN이 올바르지 않습니다.';
+          $('pin').value = '';
+        }
+      } catch (err) {
+        $('pinErr').textContent = `확인 실패: ${err.message}`;
+      } finally {
+        $('pinBtn').disabled = false;
+      }
+    }
+    $('pinBtn').onclick = tryPin;
+    $('pin').addEventListener('keydown', e => { if (e.key === 'Enter') tryPin(); });
 
     // ── 선생님 select ──────────────
     $('teacher').innerHTML = TEACHERS
@@ -172,20 +227,51 @@
       $('save').textContent = isTeacher ? '💾 이 선생님 시간표로 저장' : '💾 이 반 시간표로 저장';
     }
 
-    // ── 파일 → base64 공통 처리 ────
+    // ── 파일 → base64 공통 처리 (업로드 전 축소·압축) ────
+    // 휴대폰 카메라 원본(수 MB)을 그대로 base64로 보내면 서버리스 함수의
+    // 기본 요청 바디 크기 제한에 걸려 큰 사진이 업로드 실패할 수 있다.
+    // AI가 표를 읽는 데는 원본 해상도가 필요 없으므로 canvas로 한 변
+    // MAX_DIM 이하로 줄이고 JPEG로 재압축해서 보낸다.
+    const MAX_DIM = 1600;
+    const JPEG_QUALITY = 0.85;
+
+    function resizeImageFile(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          let { width, height } = img;
+          if (width > MAX_DIM || height > MAX_DIM) {
+            const scale = MAX_DIM / Math.max(width, height);
+            width = Math.round(width * scale);
+            height = Math.round(height * scale);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', JPEG_QUALITY));
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('이미지를 읽을 수 없습니다.')); };
+        img.src = url;
+      });
+    }
+
     function bindFileInput(inputId) {
-      $(inputId).addEventListener('change', e => {
+      $(inputId).addEventListener('change', async e => {
         const f = e.target.files[0];
         if (!f) return;
-        imageMime = f.type || 'image/jpeg';
-        const reader = new FileReader();
-        reader.onload = () => {
-          imageB64 = reader.result.split(',')[1];
-          $('preview').src = reader.result;
+        try {
+          const dataUrl = await resizeImageFile(f);
+          imageMime = 'image/jpeg';
+          imageB64 = dataUrl.split(',')[1];
+          $('preview').src = dataUrl;
           $('preview').style.display = 'block';
           $('analyze').disabled = false;
-        };
-        reader.readAsDataURL(f);
+        } catch (err) {
+          setStatus('status', 'err', `이미지 처리 실패: ${err.message}`);
+        }
       });
     }
     bindFileInput('file');
@@ -277,13 +363,13 @@
       try {
         if (currentMode === 'teacher') {
           const id = $('teacher').value;
-          await saveAiSchedule(id, schedule);
+          await saveAiSchedule(id, schedule, adminPin);
           const t = TEACHERS.find(x => x.id === id);
           setStatus('saveStatus', 'ok', `${t ? t.name : id} 선생님 시간표를 저장했습니다. 학생 화면에 반영됩니다.`);
         } else {
           const grade = $('grade').value, classNum = $('classNum').value;
           const classId = `${grade}-${classNum}`;
-          await saveClassAiSchedule(classId, schedule);
+          await saveClassAiSchedule(classId, schedule, adminPin);
           setStatus('saveStatus', 'ok', `${grade}학년 ${classNum}반 시간표를 저장했습니다. 반 시간표 화면에 반영됩니다.`);
         }
       } catch {
