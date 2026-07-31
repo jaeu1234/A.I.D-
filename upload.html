@@ -63,20 +63,9 @@
     <h1>시간표 사진 AI 분석</h1>
     <div class="sub">시간표 사진을 올리면 Claude가 읽어 표로 변환합니다. 확인·수정 후 저장하세요.</div>
 
-    <!-- 1. API 키 -->
+    <!-- 1. 대상 선택 + 사진 -->
     <div class="card">
-      <h3><span class="step">1</span>Anthropic API 키</h3>
-      <label class="f">API 키 (sk-ant-...)
-        <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" />
-      </label>
-      <button class="btn btn-ghost" id="saveKey">키 저장</button>
-      <div class="warn">⚠️ 키는 이 브라우저(localStorage)에 저장되고 API 호출 시 노출됩니다.
-        실운영에서는 서버 프록시를 통해 호출해야 합니다.</div>
-    </div>
-
-    <!-- 2. 대상 선택 + 사진 -->
-    <div class="card">
-      <h3><span class="step">2</span>대상 선택 · 사진 업로드</h3>
+      <h3><span class="step">1</span>대상 선택 · 사진 업로드</h3>
       <div style="display:flex;gap:6px;margin-bottom:14px;">
         <button class="btn btn-ghost" id="modeTeacherBtn" style="flex:1;padding:8px 0;font-size:13px;font-weight:700;background:var(--accent);color:#fff;">선생님 시간표</button>
         <button class="btn btn-ghost" id="modeClassBtn" style="flex:1;padding:8px 0;font-size:13px;font-weight:700;">반 시간표</button>
@@ -118,7 +107,7 @@
 
     <!-- 3. 결과 편집 -->
     <div class="card hidden" id="resultCard">
-      <h3><span class="step">3</span>결과 확인 · 수정</h3>
+      <h3><span class="step">2</span>결과 확인 · 수정</h3>
       <div class="hint" id="editHint">셀 형식: <b>과목(학년-반)</b> 예: 수학(2-1). 빈 시간은 비워두세요. 점심 열은 보통 빈칸입니다.</div>
       <div style="overflow-x:auto;">
         <table class="edit" id="editTable"></table>
@@ -136,8 +125,6 @@
     import { saveAiSchedule, saveClassAiSchedule } from './src/lib/location.js';
 
     const $ = (id) => document.getElementById(id);
-    const MODEL = 'claude-sonnet-5';
-    const KEY_LS = 'anthropic_api_key';
 
     let imageB64 = null, imageMime = null, parsed = null;
     let currentMode = 'teacher'; // 'teacher' | 'class'
@@ -185,13 +172,6 @@
       $('save').textContent = isTeacher ? '💾 이 선생님 시간표로 저장' : '💾 이 반 시간표로 저장';
     }
 
-    // ── API 키 ─────────────────────
-    $('apiKey').value = localStorage.getItem(KEY_LS) || '';
-    $('saveKey').onclick = () => {
-      localStorage.setItem(KEY_LS, $('apiKey').value.trim());
-      setStatus('status', 'ok', '키를 저장했습니다.');
-    };
-
     // ── 파일 → base64 공통 처리 ────
     function bindFileInput(inputId) {
       $(inputId).addEventListener('change', e => {
@@ -212,76 +192,35 @@
     bindFileInput('fileClass');
 
     // ── AI 분석 ────────────────────
+    // 실제 Anthropic API 호출은 서버(/api/analyze)가 대신 한다 — API 키가
+    // 브라우저에 전혀 노출되지 않도록 서버 환경변수(ANTHROPIC_API_KEY)로만 보관.
     $('analyze').onclick = analyze;
 
-    function buildInstruction() {
-      if (currentMode === 'teacher') {
-        return '이 이미지는 한 선생님의 주간 시간표입니다. 내용을 읽어 2차원 배열 schedule로 변환하세요. ' +
-          'schedule[요일][교시] 구조이며 요일 인덱스는 0=월,1=화,2=수,3=목,4=금 (총 5개), ' +
-          '교시 인덱스는 0~7 (1교시,2교시,3교시,4교시,점심,5교시,6교시,7교시 순, 총 8개)입니다. ' +
-          '각 칸의 값은 "과목(학년-반)" 형식 문자열(예: "수학(2-1)")로, 수업이 없으면 null로 채우세요. ' +
-          '점심 열(인덱스 4)은 일반적으로 null입니다. 읽을 수 없는 칸은 null로 두세요.';
-      }
-      const grade = $('grade').value, classNum = $('classNum').value;
-      return `이 이미지는 ${grade}학년 ${classNum}반의 주간 시간표입니다. 내용을 읽어 2차원 배열 schedule로 변환하세요. ` +
-        'schedule[요일][교시] 구조이며 요일 인덱스는 0=월,1=화,2=수,3=목,4=금 (총 5개), ' +
-        '교시 인덱스는 0~7 (1교시,2교시,3교시,4교시,점심,5교시,6교시,7교시 순, 총 8개)입니다. ' +
-        '각 칸의 값은 "과목(선생님이름)" 형식 문자열(예: "수학(홍민지)")로, 수업이 없으면 null로 채우세요. ' +
-        '점심 열(인덱스 4)은 일반적으로 null입니다. 읽을 수 없는 칸은 null로 두세요.';
-    }
-
     async function analyze() {
-      const key = ($('apiKey').value || localStorage.getItem(KEY_LS) || '').trim();
-      if (!key) { setStatus('status', 'err', 'API 키를 먼저 입력·저장하세요.'); return; }
       if (!imageB64) { setStatus('status', 'err', '사진을 먼저 업로드하세요.'); return; }
 
       $('analyze').disabled = true;
       setStatus('status', '', '분석 중… (수 초 소요)');
 
-      const schema = {
-        type: 'object', additionalProperties: false, required: ['schedule'],
-        properties: {
-          schedule: {
-            type: 'array',
-            items: { type: 'array', items: { anyOf: [{ type: 'string' }, { type: 'null' }] } },
-          },
-        },
-      };
-
-      const body = {
-        model: MODEL, max_tokens: 4096,
-        output_config: { format: { type: 'json_schema', schema } },
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: imageMime, data: imageB64 } },
-            { type: 'text', text: buildInstruction() },
-          ],
-        }],
-      };
+      const payload = { mode: currentMode, imageB64, imageMime };
+      if (currentMode === 'class') {
+        payload.grade = $('grade').value;
+        payload.classNum = $('classNum').value;
+      }
 
       try {
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
+        const res = await fetch('/api/analyze', {
           method: 'POST',
-          headers: {
-            'x-api-key': key, 'anthropic-version': '2023-06-01',
-            'content-type': 'application/json',
-            'anthropic-dangerous-direct-browser-access': 'true',
-          },
-          body: JSON.stringify(body),
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
         });
         const data = await res.json();
         if (!res.ok) {
-          setStatus('status', 'err', `분석 실패: ${data?.error?.message || 'HTTP ' + res.status}`);
+          setStatus('status', 'err', `분석 실패: ${data?.error || 'HTTP ' + res.status}`);
           $('analyze').disabled = false; return;
         }
-        const textBlock = (data.content || []).find(b => b.type === 'text');
-        if (!textBlock) { setStatus('status', 'err', '응답에서 결과를 찾지 못했습니다.'); $('analyze').disabled = false; return; }
-        let result;
-        try { result = JSON.parse(textBlock.text); }
-        catch { setStatus('status', 'err', '결과 JSON 파싱 실패. 다시 시도하세요.'); $('analyze').disabled = false; return; }
 
-        parsed = normalize(result.schedule);
+        parsed = normalize(data.schedule);
         renderEditTable(parsed);
         $('resultCard').classList.remove('hidden');
         setStatus('status', 'ok', '분석 완료. 아래에서 확인·수정하세요.');

@@ -35,9 +35,11 @@ teacher-map-v2/
 
 - **언어**: 바닐라 HTML/CSS/JavaScript (빌드 도구 없음)
 - **렌더링**: Canvas 2D API (평면도, 핀, 동선 화살표)
-- **AI**: Anthropic Claude API `claude-sonnet-4-6` (시간표 사진 분석)
-- **저장**: Supabase(Postgres + Realtime) — 임시일정·AI 시간표. `localStorage`는 API키만 보관
-- **호스팅**: Vercel — 프로덕션 **https://teacher-map.vercel.app/** (빌드 없이 정적 파일 그대로 서빙)
+- **AI**: Anthropic Claude API `claude-sonnet-4-6` (시간표 사진 분석). API 키는 브라우저에 두지 않고
+  서버리스 함수(`api/analyze.js`)가 환경변수(`ANTHROPIC_API_KEY`)로 보관·호출을 대신함
+- **저장**: Supabase(Postgres + Realtime) — 임시일정·AI 시간표
+- **호스팅**: Vercel — 프로덕션 **https://teacher-map.vercel.app/** (빌드 없이 정적 파일 그대로 서빙,
+  `api/` 폴더만 서버리스 함수로 자동 인식됨). 배포 시 프로젝트 환경변수에 `ANTHROPIC_API_KEY` 등록 필요
 
 ---
 
@@ -73,9 +75,9 @@ AI 분석 시간표 (Supabase: ai_schedules 테이블, 기기 간 Realtime 동�
 - 선생님별 주간 시간표 요약 (AI 시간표 우선 적용 결과 확인)
 
 ### upload.html (시간표 업로드)
-- Anthropic API 키 입력·저장
 - 선생님/반 시간표 모드 전환, 시간표 사진 업로드·미리보기
-- Claude API로 시간표 사진을 요일×교시 표로 자동 파싱
+- 사진을 서버리스 함수(`api/analyze.js`)로 전송 → 그 함수가 Claude API를 호출해 요일×교시 표로 자동 파싱
+  (API 키는 서버 환경변수에만 있고 브라우저에는 노출되지 않음)
 - 파싱 결과 셀 단위 수정 후 Supabase 저장
 
 ---
@@ -110,9 +112,10 @@ AI 분석 시간표 (Supabase: ai_schedules 테이블, 기기 간 Realtime 동�
    - `ADMIN_PIN = '1234'` 하드코딩, 클라이언트에 노출
    - 실사용 시 서버사이드 인증 또는 최소 환경변수로 분리 필요
 
-7. **시간표 파싱 정규식 취약**
-   - `cls.match(/\((\d+)-(\d+)\)/)` → 과목명에 괄호 있으면 오파싱
-   - 데이터 포맷을 `{ subject, grade, class }` 객체로 정규화 권장
+7. ~~시간표 파싱 정규식 취약~~ ✅ 완료
+   - 선생님 시간표(`schedule.js` `parseClassLabel`)와 반 AI 시간표(`location.js`
+     `_parseClassScheduleCell`) 모두 문자열 끝의 괄호만 학년-반/선생님이름으로 인식하도록
+     앵커링해, 과목명에 괄호가 섞여도(예: `국어(문학)(홍길동)`) 오파싱되지 않음
 
 8. **주말 처리**
    - `getTodayIndex()`가 토·일을 `0(월)`로 고정 → 의도된 것이지만 주석 부재
