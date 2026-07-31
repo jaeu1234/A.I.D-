@@ -58,6 +58,17 @@ export function getEffectiveSchedule(teacherId) {
 // ─────────────────────────────────────────────
 
 /**
+ * 선생님이 소속된 교무실 층.
+ * TEACHERS의 officeFloor가 정답이고, 아직 지정하지 않은 선생님은 null을 반환한다
+ * (null = 층 자유 → 보고 있는 층의 교무실에 표시되는 예전 동작 유지).
+ * @param {string} teacherId
+ * @returns {number|null}
+ */
+function officeFloorOf(teacherId) {
+  return TEACHERS.find(t => t.id === teacherId)?.officeFloor ?? null;
+}
+
+/**
  * 특정 선생님의 day/period 기준 실제 위치 반환
  * 우선순위: 임시 일정 > AI 시간표 > 기본 시간표
  *
@@ -74,6 +85,7 @@ export function getTeacherLocation(teacherId, dayIdx, periodIdx) {
     // 등교 시간대(1교시 08:30~)에 "오늘" 임시일정이 매칭되지 않는 버그가 있었다 → 로컬 날짜 사용.
     today: getLocalDateStr(),
     schedule: getEffectiveSchedule(teacherId),
+    officeFloor: officeFloorOf(teacherId),
   });
 }
 

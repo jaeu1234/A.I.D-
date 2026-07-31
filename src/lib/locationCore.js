@@ -69,16 +69,18 @@ export function resolveSpecialRoom(teacherId, subject) {
  * @param {Array<{teacherId,date,periodIdx,label,room,floor,note}>} ctx.overrides - 임시일정 목록
  * @param {string} ctx.today - 'YYYY-MM-DD' (로컬 날짜)
  * @param {Array<Array<object|null>>|null} ctx.schedule - getEffectiveSchedule 결과(5×8 ClassCell 그리드)
+ * @param {number|null} [ctx.officeFloor] - 그 선생님이 소속된 교무실 층(3·4·5).
+ *   null이면 "층 자유"라 보고 있는 층의 교무실마다 표시된다(소속 미확인 선생님).
  * @returns {LocationResult}
  */
-export function resolveTeacherLocation(teacherId, dayIdx, periodIdx, { periods, overrides, today, schedule }) {
+export function resolveTeacherLocation(teacherId, dayIdx, periodIdx, { periods, overrides, today, schedule, officeFloor = null }) {
   if (periodIdx < 0) {
     return { type: 'break', label: '쉬는 시간', room: null, floor: null };
   }
 
   const period = periods[periodIdx];
   if (period.isLunch) {
-    return { type: 'lunch', label: '점심', room: 'office', floor: null };
+    return { type: 'lunch', label: '점심', room: 'office', floor: officeFloor };
   }
 
   const override = overrides.find(
@@ -94,7 +96,7 @@ export function resolveTeacherLocation(teacherId, dayIdx, periodIdx, { periods, 
     };
   }
 
-  if (!schedule) return { type: 'office', label: '교무실', room: 'office', floor: null };
+  if (!schedule) return { type: 'office', label: '교무실', room: 'office', floor: officeFloor };
 
   const cls = schedule[dayIdx]?.[periodIdx];
   if (cls) {
@@ -111,10 +113,10 @@ export function resolveTeacherLocation(teacherId, dayIdx, periodIdx, { periods, 
       const roomId = `${cls.grade}-${cls.class}`;
       return { type: 'class', label: cls.label, room: roomId, floor: findRoomFloor(roomId) };
     }
-    return { type: 'class', label: cls.label, room: 'office', floor: null };
+    return { type: 'class', label: cls.label, room: 'office', floor: officeFloor };
   }
 
-  return { type: 'office', label: '교무실', room: 'office', floor: null };
+  return { type: 'office', label: '교무실', room: 'office', floor: officeFloor };
 }
 
 // ─────────────────────────────────────────────
@@ -205,11 +207,16 @@ export function statusColor(type) {
  */
 export function resolveRoom(roomId, locFloor, currentFloor, floorData) {
   if (!roomId) return null;
+  // locFloor는 0(지하)일 수 있어 falsy 체크(if(locFloor && ...))를 쓰면 안 됨.
+  // 교무실도 여기서 함께 걸러야 한다 — 예전엔 office를 층 검사보다 먼저 처리해서
+  // 소속 층과 무관하게 보고 있는 층의 교무실에 매번 그려졌고, 그래서 선생님을
+  // 선택한 뒤 다른 층으로 넘어가도 같은 자리에 그대로 따라다녔다.
+  if (locFloor != null && locFloor !== currentFloor) return null;
   if (roomId === 'office') {
+    // 소속 층이 정해지지 않은(officeFloor 미지정) 선생님은 locFloor가 null이라
+    // 여기까지 오며, 예전처럼 보고 있는 층의 교무실에 표시된다.
     const officeId = OFFICE_IDS[currentFloor];
     return floorData.rooms.find(r => r.id === officeId) ?? null;
   }
-  // locFloor는 0(지하)일 수 있어 falsy 체크(if(locFloor && ...))를 쓰면 안 됨
-  if (locFloor != null && locFloor !== currentFloor) return null;
   return floorData.rooms.find(r => r.id === roomId) ?? null;
 }

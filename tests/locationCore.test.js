@@ -62,6 +62,19 @@ test('resolveTeacherLocation: 시간표가 없으면 교무실', () => {
   assert.equal(loc.room, 'office');
 });
 
+test('resolveTeacherLocation: officeFloor를 주면 교무실·점심 위치에 그 층이 실린다', () => {
+  const lunchIdx = PERIODS.findIndex(p => p.isLunch);
+  const ctx = { ...ctxBase, schedule: null, officeFloor: 4 };
+  assert.equal(resolveTeacherLocation('T1', 0, 0, ctx).floor, 4);
+  assert.equal(resolveTeacherLocation('T1', 0, lunchIdx, ctx).floor, 4);
+});
+
+test('resolveTeacherLocation: officeFloor를 안 주면 floor가 null(층 자유)', () => {
+  // 소속 교무실을 아직 확인하지 못한 선생님은 예전처럼 모든 층 교무실에 표시돼야 한다.
+  const loc = resolveTeacherLocation('T1', 0, 0, { ...ctxBase, schedule: null });
+  assert.equal(loc.floor, null);
+});
+
 test('resolveTeacherLocation: 학년-반이 있는 일반 과목은 그 교실로, floor는 findRoomFloor로 조회', () => {
   const schedule = [[{ subject: '수학', grade: 1, class: 1, label: '수학(1-1)' }], [], [], [], []];
   const loc = resolveTeacherLocation('T1', 0, 0, { ...ctxBase, schedule });
@@ -163,4 +176,14 @@ test('resolveRoom: locFloor가 0(지하)이어도 falsy로 오판하지 않고 �
 
 test('resolveRoom: roomId가 없으면 null', () => {
   assert.equal(resolveRoom(null, 5, 5, FLOORS[5]), null);
+});
+
+test('resolveRoom: 소속 층이 정해진 교무실은 다른 층에서 null', () => {
+  // 이게 없으면 교무실 선생님이 모든 층을 따라다닌다(층을 바꿔도 같은 자리에 남던 버그).
+  assert.equal(resolveRoom('office', 4, 5, FLOORS[5]), null);
+});
+
+test('resolveRoom: 소속 층과 보는 층이 같으면 그 층 교무실로 매핑', () => {
+  const room = resolveRoom('office', 5, 5, FLOORS[5]);
+  assert.equal(room.id, OFFICE_IDS[5]);
 });

@@ -1,4 +1,4 @@
-import { TEACHERS, PERIODS } from '../data/schedule.js';
+import { TEACHERS, PERIODS, shortName } from '../data/schedule.js';
 import { FLOORS } from '../data/floors.js';
 import { getTeacherLocation, getNextMove, resolveRoom, statusColor } from './location.js';
 import {
@@ -674,7 +674,9 @@ function _drawPin(ctx, px, py, t, loc, selected) {
   ctx.font         = `700 ${Math.max(9, r * 0.75)}px sans-serif`;
   ctx.textAlign    = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(t.id, px, py);
+  // 한글 두 글자(성 제외). 폰트는 반지름의 0.75배라 2글자 폭(≈2×fs)이
+  // 원 안쪽 폭(≈1.8×r)에 들어간다 — 핀 크기·간격은 그대로 두어도 넘치지 않는다.
+  ctx.fillText(shortName(t.name), px, py);
 }
 
 /** 여러 명이 모인 방을 대표하는 "N명" 클러스터 칩 */
