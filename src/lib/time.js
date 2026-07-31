@@ -56,6 +56,21 @@ export function getBreakAfterIndex(now = new Date()) {
 }
 
 /**
+ * 화면에 표시할 교시 상태 라벨.
+ * 진행 중인 교시면 그 이름, 교시 사이 쉬는 시간이면 '쉬는 시간', 등교 전·하교
+ * 후처럼 일과 시간 자체를 벗어났으면 '방과후'를 반환한다. 예전엔 이 셋을
+ * 구분 안 하고 교시가 아니면 전부 '쉬는 시간'으로 표시해서, 밤에 봐도
+ * "쉬는 시간"이라고 나오는 게 어색했다.
+ * @param {Date} [now]
+ * @returns {string}
+ */
+export function getPeriodStatusLabel(now = new Date()) {
+  const pi = getCurrentPeriodIndex(now);
+  if (pi >= 0) return PERIODS[pi].label;
+  return getBreakAfterIndex(now) >= 0 ? '쉬는 시간' : '방과후';
+}
+
+/**
  * 오늘 요일 인덱스 (0=월 ~ 4=금)
  *
  * 정책: 주말(토·일)에는 월요일(0) 시간표를 기준으로 고정 표시한다 — 의도된 동작.

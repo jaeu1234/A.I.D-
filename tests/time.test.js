@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   toMins, getNowMins, getCurrentPeriodIndex, getNextPeriodIndex,
   getBreakAfterIndex, getTodayIndex, isWeekend, getLocalDateStr,
+  getPeriodStatusLabel,
 } from '../src/lib/time.js';
 
 test('toMins: HH:MM을 분으로 변환', () => {
@@ -49,6 +50,19 @@ test('isWeekend: 토·일만 true', () => {
   assert.equal(isWeekend(new Date(2026, 6, 27)), false, '월요일');
   assert.equal(isWeekend(new Date(2026, 7, 1)), true, '토요일');
   assert.equal(isWeekend(new Date(2026, 7, 2)), true, '일요일');
+});
+
+test('getPeriodStatusLabel: 수업 중엔 교시 이름', () => {
+  assert.equal(getPeriodStatusLabel(new Date(2026, 0, 1, 9, 0)), '1교시');
+});
+
+test('getPeriodStatusLabel: 교시 사이(수업 있는 시간대)는 쉬는 시간', () => {
+  assert.equal(getPeriodStatusLabel(new Date(2026, 0, 1, 9, 25)), '쉬는 시간');
+});
+
+test('getPeriodStatusLabel: 등교 전·방과후는 방과후 (예전엔 둘 다 "쉬는 시간"으로 잘못 표시됐음)', () => {
+  assert.equal(getPeriodStatusLabel(new Date(2026, 0, 1, 8, 29)), '방과후', '등교 전');
+  assert.equal(getPeriodStatusLabel(new Date(2026, 0, 1, 20, 0)), '방과후', '하교 후');
 });
 
 test('getLocalDateStr: 자정 근처에도 UTC로 밀리지 않고 로컬 날짜 유지', () => {

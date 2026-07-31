@@ -2,6 +2,7 @@ import { PERIODS, DAYS, TEACHERS, shortName } from '../data/schedule.js';
 import { FLOORS, getAllClassrooms, findRoomFloor } from '../data/floors.js';
 import {
   getCurrentPeriodIndex, getBreakAfterIndex, getTodayIndex, isWeekend, toMins,
+  getPeriodStatusLabel,
 } from '../lib/time.js';
 import {
   getTeacherLocation, buildTimeline, getNextMove, resolveRoom, getClassSchedule, initSync,
@@ -381,8 +382,7 @@ function updateClock() {
   const mm = String(now.getMinutes()).padStart(2, '0');
   const weekendNote = isWeekend() ? ' · 주말(월요일 시간표 기준)' : '';
   $('clock').textContent = `${DAYS[getTodayIndex()]}요일 ${hh}:${mm}${weekendNote}`;
-  const pi = getCurrentPeriodIndex();
-  $('periodBadge').textContent = pi >= 0 ? PERIODS[pi].label : '쉬는 시간';
+  $('periodBadge').textContent = getPeriodStatusLabel();
 }
 
 // ── 캔버스 인터랙션 ───────────────

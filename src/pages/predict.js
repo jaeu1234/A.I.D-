@@ -1,6 +1,6 @@
 import { PERIODS, DAYS, TEACHERS, shortName } from '../data/schedule.js';
 import { FLOORS } from '../data/floors.js';
-import { getCurrentPeriodIndex, getTodayIndex } from '../lib/time.js';
+import { getCurrentPeriodIndex, getTodayIndex, getPeriodStatusLabel } from '../lib/time.js';
 import { getTeacherLocation, resolveRoom, initSync } from '../lib/location.js';
 import {
   initCanvas, render, resetZoom, setFloorAndReset,
@@ -61,8 +61,7 @@ function applyPredictionContext() {
 }
 
 function updateSummary() {
-  const pi = currentPredictPeriodIndex();
-  const periodLabel = pi >= 0 ? PERIODS[pi].label : '쉬는 시간';
+  const periodLabel = getPeriodStatusLabel(new Date(2000, 0, 1, predictHour, predictMin));
   $('predictSummary').textContent = `${DAYS[predictDay]}요일 ${fmtTime()} · ${periodLabel} 기준`;
 }
 
