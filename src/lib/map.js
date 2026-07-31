@@ -113,6 +113,20 @@ export function resetZoom() {
   render();
 }
 
+// 패닝(pointermove)·휠 줌은 스로틀 없이 원본 이벤트마다 발생해서, 빠르게
+// 움직이면 한 프레임 안에 여러 번 불릴 수 있다. 카메라 상태(_camX 등) 갱신은
+// 매 호출마다 즉시 반영하되, 실제 캔버스 그리기(render())만 프레임당 한 번으로
+// 모아(coalesce) 낭비되는 렌더를 없앤다 — 최종 카메라 위치는 그대로 정확하다.
+let _renderScheduled = false;
+function _scheduleRender() {
+  if (_renderScheduled) return;
+  _renderScheduled = true;
+  requestAnimationFrame(() => {
+    _renderScheduled = false;
+    render();
+  });
+}
+
 /**
  * 줌 (스크린 좌표 기준 핀치 포인트)
  * @param {number} factor - 1보다 크면 확대
@@ -132,7 +146,7 @@ export function zoom(factor, sx = _CW / 2, sy = _CH / 2) {
   _camX += before.x - after.x;
   _camY += before.y - after.y;
   _clampCamera();
-  render();
+  _scheduleRender();
 }
 
 /** 드래그 패닝 */
@@ -140,7 +154,7 @@ export function pan(dx, dy) {
   _camX -= dx / _camZ;
   _camY -= dy / _camZ;
   _clampCamera();
-  render();
+  _scheduleRender();
 }
 
 /**

@@ -1,7 +1,8 @@
 /* 4개 화면(index/admin/upload/predict) 공용 디자인 토큰 + 기본 리셋.
    예전엔 각 페이지 CSS가 :root 변수·리셋을 따로 정의해서(index.css/predict.css는
    완전 동일, admin.css/upload.css는 부분집합) 색상 하나 바꾸려면 파일 4개를
-   따로 고쳐야 했다. 이제 각 페이지 CSS가 맨 위에서 @import로 이 파일을 가져온다. */
+   따로 고쳐야 했다. 각 HTML의 <head>가 이 파일을 별도 <link>로 먼저 불러온다
+   (CSS @import는 순차 요청을 만들어 첫 페인트를 늦추므로 쓰지 않음). */
 :root {
   --bg: #f4f5f8;
   --panel: #ffffff;
