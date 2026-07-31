@@ -9,7 +9,7 @@ import {
 import {
   initCanvas, render, resetZoom, setFloorAndReset,
   zoom, pan, zoomToRoom, hitTestPin, setSelectedId,
-  getTravelerState, setRouteProgress, invalidateRouteCache,
+  getTravelerState, setRouteProgress, invalidateLocationCache,
 } from '../lib/map.js';
 import { escapeHtml } from '../lib/html.js';
 
@@ -26,7 +26,7 @@ const canvas = $('map');
 // 다른 기기(관리자 임시일정 등록, AI 시간표 업로드)의 변경이 Realtime으로
 // 들어오면 현재 화면(선택된 선생님/반)을 다시 그린다.
 function rerenderCurrentSelection() {
-  invalidateRouteCache(); // Realtime로 임시일정·AI 시간표가 바뀌면 경로 캐시 무효화
+  invalidateLocationCache(); // Realtime로 임시일정·AI 시간표가 바뀌면 경로·점유 캐시 무효화
   render();
   if (viewMode === 'teacher' && selectedId) renderInfo();
   if (viewMode === 'class' && selectedClass) renderClassInfo(selectedClass.grade, selectedClass.classNum);

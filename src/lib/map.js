@@ -25,7 +25,6 @@ let _routeProgress = null;
 // 예측 모드에서 의미가 없으므로 이때는 그리지 않는다.
 let _predictDayPi = null;
 
-export function getCamera() { return { x: _camX, y: _camY, z: _camZ }; }
 export function setSelectedId(id) { _selectedId = id; }
 export function setRouteProgress(p) { _routeProgress = p; }
 /** 예측 모드 켜기: 이후 render()·hitTestPin()이 이 [day, periodIdx] 기준으로 그려진다. */
@@ -399,11 +398,14 @@ function _drawLines(ctx, fit, cx, cyCenter, weight, color) {
 // _routeContext 결과 캐시. 진행률은 분 단위(getNowMins)로만 바뀌고 경로는
 // 층·override에만 의존하므로, (teacherId, 현재 분) 키로 캐시하면 같은 분 안의
 // 반복 호출(render + getTravelerState)이 재계산을 피한다. override/AI 시간표가
-// Realtime으로 바뀌면 invalidateRouteCache()로 무효화한다.
+// Realtime으로 바뀌면 invalidateLocationCache()로 무효화한다.
 let _rcCache = { key: null, val: null };
 
-/** override/AI 시간표 변경 등으로 위치가 바뀌었을 때 경로 캐시를 비운다. */
-export function invalidateRouteCache() { _rcCache = { key: null, val: null }; }
+/** override/AI 시간표 변경 등으로 위치가 바뀌었을 때 경로·점유 캐시를 모두 비운다. */
+export function invalidateLocationCache() {
+  _rcCache = { key: null, val: null };
+  _occCache = { key: null, val: null };
+}
 
 function _routeContext(teacherId) {
   const cacheKey = teacherId + '|' + getNowMins();
@@ -624,12 +626,22 @@ function _drawTraveler(ctx, x, y, color) {
   ctx.restore();
 }
 
+// _computeOccupancy 결과 캐시. (현재 층, day, period) 세 값이 같으면 전체 선생님의
+// 위치가 그대로이므로, 그 키로 캐시하면 같은 순간에 반복되는 호출(render + hitTestPin,
+// 또는 아무것도 안 바뀐 채 재렌더만 도는 쉬는 시간 1초 틱)이 25명 전원의
+// getTeacherLocation(override 선형 탐색 포함)을 매번 다시 하지 않아도 된다.
+// override/AI 시간표가 Realtime으로 바뀌면 invalidateLocationCache()로 무효화한다.
+let _occCache = { key: null, val: null };
+
 /**
  * 방별로 어떤 선생님이 있는지 묶어서 반환. { [roomId]: [{ t, loc }] }
  * 렌더링(_drawFloor 라벨 위치·_drawAllPins)과 클릭 판정(hitTestPin)이
  * 모두 같은 기준을 쓰도록 한 곳에서 계산한다.
  */
 function _computeOccupancy(floor, day, pi) {
+  const cacheKey = `${_currentFloor}|${day}|${pi}`;
+  if (_occCache.key === cacheKey) return _occCache.val;
+
   const byRoom = {};
   TEACHERS.forEach(t => {
     const loc  = getTeacherLocation(t.id, day, pi);
@@ -637,6 +649,7 @@ function _computeOccupancy(floor, day, pi) {
     if (!room) return;
     (byRoom[room.id] ??= []).push({ t, loc });
   });
+  _occCache = { key: cacheKey, val: byRoom };
   return byRoom;
 }
 

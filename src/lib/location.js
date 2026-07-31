@@ -10,7 +10,7 @@ export { initSync, addOverride, deleteOverride, saveAiSchedule, saveClassAiSched
 // 위치 판정의 순수 로직은 locationCore.js로 옮겼다(Node에서 직접 테스트하기 위함,
 // tests/locationCore.test.js 참고). 기존 import 경로를 쓰는 코드가 그대로 동작하도록
 // 여기서 재수출한다 — 공개 API는 바뀌지 않았다.
-export { resolveSpecialRoom, statusColor, resolveRoom } from './locationCore.js';
+export { statusColor, resolveRoom } from './locationCore.js';
 
 // ─────────────────────────────────────────────
 // Supabase 동기화 캐시 읽기

@@ -80,7 +80,8 @@ export function shortName(name) {
 // 선생님 기본 시간표
 // schedule[요일(0=월)][교시(0=1교시)] = ClassCell | null
 // 원본은 '과목(학년-반)' 문자열로 작성하고 buildSchedule()로 정규화한다.
-// TODO: AI 업로드 또는 관리자 수정으로 localStorage에서 덮어씀
+// 여기 있는 건 최후 폴백일 뿐, 실제로는 AI 업로드·관리자 임시일정이 Supabase에
+// 저장돼 이보다 우선 적용된다 (location.js getEffectiveSchedule 참고).
 // ─────────────────────────────────────────────
 // officeFloor: 그 선생님이 소속된 교무실 층(3·4·5 중 하나). 수업이 없는 교시·점심에
 // 어느 층 교무실에 표시할지, 그리고 선택했을 때 어느 층으로 이동할지를 결정한다.

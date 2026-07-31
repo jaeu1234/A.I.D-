@@ -5,7 +5,7 @@ import { getTeacherLocation, resolveRoom, initSync } from '../lib/location.js';
 import {
   initCanvas, render, resetZoom, setFloorAndReset,
   zoom, pan, zoomToRoom, hitTestPin, setSelectedId,
-  setPredictionContext,
+  setPredictionContext, invalidateLocationCache,
 } from '../lib/map.js';
 import { escapeHtml } from '../lib/html.js';
 
@@ -22,6 +22,10 @@ const canvas = $('map');
 
 // ── 초기화 ────────────────────────
 function rerenderCurrentSelection() {
+  // 다른 기기(관리자 임시일정 등록, AI 시간표 업로드)의 변경이 Realtime으로 들어오면
+  // 지금 보고 있는 (층, 예측 요일·교시)가 그대로라도 점유 캐시가 낡은 값을 계속
+  // 돌려주지 않도록 비운다.
+  invalidateLocationCache();
   applyPredictionContext();
   render();
   if (selectedId) renderInfo();
