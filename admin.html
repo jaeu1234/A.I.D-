@@ -227,8 +227,10 @@
         await addOverride(ov, adminPin);
         $('fNote').value = '';
         renderOverrides();
-      } catch {
-        alert('임시일정 등록에 실패했습니다. 다시 시도해주세요.');
+      } catch (err) {
+        // 서버가 알려준 실제 원인(환경변수 미설정, PIN 불일치, Supabase 오류 등)을
+        // 그대로 보여준다. 예전엔 일반 문구만 떠서 콘솔을 열지 않으면 원인을 알 수 없었다.
+        alert(`임시일정 등록에 실패했습니다.\n\n${err.message}`);
       } finally {
         $('addBtn').disabled = false;
       }
@@ -259,8 +261,8 @@
           try {
             await deleteOverride(Number(btn.dataset.id), adminPin);
             renderOverrides();
-          } catch {
-            alert('임시일정 삭제에 실패했습니다. 다시 시도해주세요.');
+          } catch (err) {
+            alert(`임시일정 삭제에 실패했습니다.\n\n${err.message}`);
             btn.disabled = false;
           }
         };
