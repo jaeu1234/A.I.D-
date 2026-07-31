@@ -8,6 +8,8 @@
 // 배포 시 Vercel 프로젝트 설정 → Environment Variables에 ANTHROPIC_API_KEY를
 // 등록해야 동작한다.
 
+const { readKey } = require('./_lib/env');
+
 const MODEL = 'claude-sonnet-5';
 
 function buildInstruction(mode, grade, classNum) {
@@ -31,9 +33,13 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    res.status(500).json({ error: '서버에 ANTHROPIC_API_KEY 환경변수가 설정되어 있지 않습니다.' });
+  // readKey는 값에 섞여 들어온 BOM·공백을 걷어낸다 — 그대로 헤더에 넣으면 fetch가
+  // ByteString 변환 오류로 요청을 거부하고 원인 없는 502만 남는다(_lib/env.js 참고).
+  let apiKey;
+  try {
+    apiKey = readKey('ANTHROPIC_API_KEY');
+  } catch (err) {
+    res.status(500).json({ error: err.message });
     return;
   }
 

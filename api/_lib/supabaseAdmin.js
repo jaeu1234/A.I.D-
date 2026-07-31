@@ -9,11 +9,12 @@
 // 등록하는데, 앞에 _가 붙은 파일·폴더는 라우트 등록에서 제외한다. 그래서
 // 이 헬퍼는 엔드포인트가 아니라 sibling 함수들이 require하는 내부 모듈로만 쓰인다.
 
+const { readKey } = require('./env');
+
 const SUPABASE_URL = 'https://iuydyigpsqqvpngbdzmm.supabase.co';
 
 function serviceHeaders(extra) {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key) throw new Error('서버에 SUPABASE_SERVICE_ROLE_KEY 환경변수가 설정되어 있지 않습니다.');
+  const key = readKey('SUPABASE_SERVICE_ROLE_KEY');
   return {
     apikey: key,
     Authorization: `Bearer ${key}`,
