@@ -108,8 +108,8 @@ bindFileInput('file');
 bindFileInput('fileClass');
 
 // ── AI 분석 ────────────────────
-// 실제 Anthropic API 호출은 서버(/api/analyze)가 대신 한다 — API 키가
-// 브라우저에 전혀 노출되지 않도록 서버 환경변수(ANTHROPIC_API_KEY)로만 보관.
+// 실제 OpenAI API 호출은 서버(/api/analyze)가 대신 한다 — API 키가
+// 브라우저에 전혀 노출되지 않도록 서버 환경변수(OPENAI_API_KEY)로만 보관.
 $('analyze').onclick = analyze;
 
 async function analyze() {
