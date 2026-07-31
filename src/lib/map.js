@@ -230,7 +230,7 @@ function _drawFloor(ctx, occ = {}) {
 
   // 방 그리기
   floor.rooms.forEach(room => {
-    const { x, y, w, h, fill, stroke, label, sub, type } = room;
+    const { x, y, w, h, fill, stroke, label, type } = room;
     ctx.fillStyle   = fill;
     ctx.strokeStyle = stroke;
     ctx.lineWidth   = 1;

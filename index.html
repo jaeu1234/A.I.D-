@@ -305,7 +305,7 @@
     } from './src/lib/location.js';
     import {
       initCanvas, render, resetZoom, setFloorAndReset,
-      zoom, pan, zoomToRoom, hitTestPin, setSelectedId, getCamera,
+      zoom, pan, zoomToRoom, hitTestPin, setSelectedId,
       getTravelerState, setRouteProgress, invalidateRouteCache,
     } from './src/lib/map.js';
     import { escapeHtml } from './src/lib/html.js';
@@ -642,7 +642,7 @@
       }
       const noteHtml = cur.note ? `<div class="note">📌 ${escapeHtml(cur.note)}</div>` : '';
 
-      const rows = timeline.map(({ pi, period, loc, status }) => {
+      const rows = timeline.map(({ period, loc, status }) => {
         let pill = '';
         if (status === 'now')  pill = '<span class="status-pill pill-now">현재</span>';
         if (status === 'next') pill = '<span class="status-pill pill-next">다음</span>';
