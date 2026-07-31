@@ -199,10 +199,13 @@ export function getClassSchedule(grade, classNum) {
   return grid;
 }
 
-/** "과목(선생님이름)" 형식 셀 파싱 (반 AI 시간표 전용) */
+/** "과목(선생님이름)" 형식 셀 파싱 (반 AI 시간표 전용)
+ *  괄호를 그리디하게 앞에서부터 잡으면 과목명에 괄호가 섞인 경우
+ *  (예: '국어(문학)(홍길동)') 선생님 이름 자리가 어긋난다. 마지막
+ *  '(괄호 없는 내용)'만 선생님 이름으로 잡도록 앵커링한다. */
 function _parseClassScheduleCell(raw) {
   if (!raw) return null;
-  const m = raw.match(/^(.+?)\((.+)\)$/);
+  const m = raw.match(/^(.+)\(([^()]+)\)$/);
   if (m) {
     const teacherName = m[2];
     const teacher = TEACHERS.find(t => t.name === teacherName);

@@ -277,9 +277,9 @@
       <div class="canvas-wrap" id="canvasWrap">
         <canvas id="map"></canvas>
         <div class="zoom-ctrl">
-          <button id="zoomIn">＋</button>
-          <button id="zoomOut">－</button>
-          <button id="zoomReset" title="전체 보기">⤢</button>
+          <button id="zoomIn" aria-label="확대">＋</button>
+          <button id="zoomOut" aria-label="축소">－</button>
+          <button id="zoomReset" title="전체 보기" aria-label="전체 보기">⤢</button>
         </div>
       </div>
     </div>
@@ -308,6 +308,7 @@
       zoom, pan, zoomToRoom, hitTestPin, setSelectedId, getCamera,
       getTravelerState, setRouteProgress, invalidateRouteCache,
     } from './src/lib/map.js';
+    import { escapeHtml } from './src/lib/html.js';
 
     // ── 상태 ──────────────────────────
     let selectedId = null;
@@ -317,16 +318,6 @@
 
     const $ = (id) => document.getElementById(id);
     const canvas = $('map');
-
-    // HTML 이스케이프 (사용자 입력을 innerHTML에 삽입하기 전 필수)
-    function escapeHtml(str) {
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-    }
 
     // ── 초기화 ────────────────────────
     // 다른 기기(관리자 임시일정 등록, AI 시간표 업로드)의 변경이 Realtime으로

@@ -131,18 +131,9 @@
     import { FLOORS, ADMIN_PIN } from './src/data/floors.js';
     import { loadOverrides, addOverride, deleteOverride, getEffectiveSchedule, initSync } from './src/lib/location.js';
     import { getLocalDateStr } from './src/lib/time.js';
+    import { escapeHtml } from './src/lib/html.js';
 
     const $ = (id) => document.getElementById(id);
-
-    // HTML 이스케이프 (사용자 입력을 innerHTML에 삽입하기 전 필수)
-    function escapeHtml(str) {
-      return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-    }
 
     // ── PIN 게이트 ──────────────────
     async function tryPin() {

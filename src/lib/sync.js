@@ -52,49 +52,60 @@ export function getClassAiSchedulesCache() { return classAiSchedulesCache; }
  * @param {() => void} onRemoteChange 다른 기기에서 변경이 들어왔을 때 호출할 콜백(재렌더링용)
  */
 export async function initSync(onRemoteChange) {
-  const [ovRes, aiRes, classRes] = await Promise.all([
-    supabase.from('overrides').select('*'),
-    supabase.from('ai_schedules').select('*'),
-    supabase.from('class_ai_schedules').select('*'),
-  ]);
+  // 네트워크 장애(Supabase 응답 없음 등)로 여기서 예외가 나면 캐시가 빈 상태로
+  // 남을 뿐 기본 하드코딩 시간표로는 계속 동작해야 하므로, 호출자(boot 등)의
+  // await 체인을 끊지 않도록 여기서 잡아 로그만 남긴다.
+  try {
+    const [ovRes, aiRes, classRes] = await Promise.all([
+      supabase.from('overrides').select('*'),
+      supabase.from('ai_schedules').select('*'),
+      supabase.from('class_ai_schedules').select('*'),
+    ]);
 
-  if (ovRes.error) console.error('overrides 로드 실패:', ovRes.error.message);
-  else overridesCache = ovRes.data.map(rowToOverride);
+    if (ovRes.error) console.error('overrides 로드 실패:', ovRes.error.message);
+    else overridesCache = ovRes.data.map(rowToOverride);
 
-  if (aiRes.error) console.error('ai_schedules 로드 실패:', aiRes.error.message);
-  else {
-    aiSchedulesCache = {};
-    aiRes.data.forEach(upsertAiScheduleInCache);
+    if (aiRes.error) console.error('ai_schedules 로드 실패:', aiRes.error.message);
+    else {
+      aiSchedulesCache = {};
+      aiRes.data.forEach(upsertAiScheduleInCache);
+    }
+
+    if (classRes.error) console.error('class_ai_schedules 로드 실패:', classRes.error.message);
+    else {
+      classAiSchedulesCache = {};
+      classRes.data.forEach(upsertClassAiScheduleInCache);
+    }
+  } catch (err) {
+    console.error('[sync] 초기 데이터 로드 실패, 기본 시간표로 계속 진행합니다:', err);
   }
 
-  if (classRes.error) console.error('class_ai_schedules 로드 실패:', classRes.error.message);
-  else {
-    classAiSchedulesCache = {};
-    classRes.data.forEach(upsertClassAiScheduleInCache);
+  try {
+    supabase
+      .channel('teacher-map-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'overrides' }, (payload) => {
+        if (payload.eventType === 'DELETE') removeOverrideFromCache(payload.old.id);
+        else upsertOverrideInCache(payload.new);
+        onRemoteChange?.();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ai_schedules' }, (payload) => {
+        if (payload.eventType === 'DELETE') delete aiSchedulesCache[payload.old.teacher_id];
+        else upsertAiScheduleInCache(payload.new);
+        onRemoteChange?.();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'class_ai_schedules' }, (payload) => {
+        if (payload.eventType === 'DELETE') delete classAiSchedulesCache[payload.old.class_id];
+        else upsertClassAiScheduleInCache(payload.new);
+        onRemoteChange?.();
+      })
+      .subscribe((status, err) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error('[sync] realtime 연결 실패:', status, err);
+        }
+      });
+  } catch (err) {
+    console.error('[sync] realtime 구독 시작 실패:', err);
   }
-
-  supabase
-    .channel('teacher-map-sync')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'overrides' }, (payload) => {
-      if (payload.eventType === 'DELETE') removeOverrideFromCache(payload.old.id);
-      else upsertOverrideInCache(payload.new);
-      onRemoteChange?.();
-    })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'ai_schedules' }, (payload) => {
-      if (payload.eventType === 'DELETE') delete aiSchedulesCache[payload.old.teacher_id];
-      else upsertAiScheduleInCache(payload.new);
-      onRemoteChange?.();
-    })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'class_ai_schedules' }, (payload) => {
-      if (payload.eventType === 'DELETE') delete classAiSchedulesCache[payload.old.class_id];
-      else upsertClassAiScheduleInCache(payload.new);
-      onRemoteChange?.();
-    })
-    .subscribe((status, err) => {
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        console.error('[sync] realtime 연결 실패:', status, err);
-      }
-    });
 }
 
 /** 임시일정 등록 */

@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.111.0';
 
 // 공개 프로젝트 URL·anon key. RLS 정책으로 접근 범위를 제어하므로
 // 브라우저에 노출돼도 되는 값이다 (service_role 키와는 다름).
