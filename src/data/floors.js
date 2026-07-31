@@ -330,5 +330,6 @@ export function getAllClassrooms() {
   return list;
 }
 
-// 관리자 PIN
-export const ADMIN_PIN = '5609';
+// 관리자 PIN은 더 이상 여기(클라이언트 번들)에 두지 않는다 — 브라우저에
+// 노출되면 devtools로 그대로 읽혀 의미가 없어진다. 서버 환경변수 ADMIN_PIN으로
+// 옮겼고, api/verify-pin.js·api/admin-write.js가 서버에서만 검증한다.

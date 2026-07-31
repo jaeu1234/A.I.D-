@@ -128,23 +128,43 @@
 
   <script type="module">
     import { TEACHERS, PERIODS, DAYS } from './src/data/schedule.js';
-    import { FLOORS, ADMIN_PIN } from './src/data/floors.js';
+    import { FLOORS } from './src/data/floors.js';
     import { loadOverrides, addOverride, deleteOverride, getEffectiveSchedule, initSync } from './src/lib/location.js';
     import { getLocalDateStr } from './src/lib/time.js';
     import { escapeHtml } from './src/lib/html.js';
 
     const $ = (id) => document.getElementById(id);
 
+    // 게이트를 통과한 PIN. 실제 쓰기 권한은 이 값 자체가 아니라 매 쓰기 요청마다
+    // /api/admin-write가 서버에서 다시 검증하는 데서 나온다 — 여기 저장은
+    // 매번 PIN을 다시 입력받지 않기 위한 UX 편의일 뿐이다.
+    let adminPin = null;
+
     // ── PIN 게이트 ──────────────────
     async function tryPin() {
-      if ($('pin').value === ADMIN_PIN) {
-        $('gate').classList.add('hidden');
-        $('app').classList.remove('hidden');
-        await initSync(() => { renderOverrides(); renderSummary(); });
-        initApp();
-      } else {
-        $('pinErr').textContent = 'PIN이 올바르지 않습니다.';
-        $('pin').value = '';
+      const candidate = $('pin').value;
+      $('pinBtn').disabled = true;
+      try {
+        const res = await fetch('/api/verify-pin', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ pin: candidate }),
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          adminPin = candidate;
+          $('gate').classList.add('hidden');
+          $('app').classList.remove('hidden');
+          await initSync(() => { renderOverrides(); renderSummary(); });
+          initApp();
+        } else {
+          $('pinErr').textContent = data.error || 'PIN이 올바르지 않습니다.';
+          $('pin').value = '';
+        }
+      } catch (err) {
+        $('pinErr').textContent = `확인 실패: ${err.message}`;
+      } finally {
+        $('pinBtn').disabled = false;
       }
     }
     $('pinBtn').onclick = tryPin;
@@ -203,7 +223,7 @@
 
       $('addBtn').disabled = true;
       try {
-        await addOverride(ov);
+        await addOverride(ov, adminPin);
         $('fNote').value = '';
         renderOverrides();
       } catch {
@@ -236,7 +256,7 @@
         btn.onclick = async () => {
           btn.disabled = true;
           try {
-            await deleteOverride(Number(btn.dataset.id));
+            await deleteOverride(Number(btn.dataset.id), adminPin);
             renderOverrides();
           } catch {
             alert('임시일정 삭제에 실패했습니다. 다시 시도해주세요.');

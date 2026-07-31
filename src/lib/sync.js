@@ -108,51 +108,66 @@ export async function initSync(onRemoteChange) {
   }
 }
 
+// ─────────────────────────────────────────────
+// 쓰기 요청 (PIN 필요)
+// anon key로 클라이언트에서 직접 insert/update/delete하던 예전 방식은, RLS가
+// anon 쓰기를 허용하는 한 devtools 콘솔에서 PIN 확인 없이 그대로 재현할 수
+// 있었다. 이제 실제 쓰기는 /api/admin-write(서버리스 함수)가 PIN을 서버에서
+// 검증한 뒤 service_role 키로만 수행한다 — 이 함수들은 그 앞단 얇은 래퍼.
+// ─────────────────────────────────────────────
+
+async function callAdminWrite(action, pin, payload) {
+  const res = await fetch('/api/admin-write', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pin, action, payload }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+  return data;
+}
+
 /** 임시일정 등록 */
-export async function addOverride(ov) {
-  const { data, error } = await supabase
-    .from('overrides')
-    .insert({
-      teacher_id: ov.teacherId,
-      date: ov.date,
-      period_idx: ov.periodIdx,
-      label: ov.label,
-      room: ov.room,
-      floor: ov.floor,
-      note: ov.note,
-    })
-    .select()
-    .single();
-  if (error) { console.error('임시일정 등록 실패:', error.message); throw error; }
-  upsertOverrideInCache(data);
-  return rowToOverride(data);
+export async function addOverride(ov, pin) {
+  try {
+    const { row } = await callAdminWrite('addOverride', pin, ov);
+    upsertOverrideInCache(row);
+    return rowToOverride(row);
+  } catch (err) {
+    console.error('임시일정 등록 실패:', err.message);
+    throw err;
+  }
 }
 
 /** 임시일정 삭제 */
-export async function deleteOverride(id) {
-  const { error } = await supabase.from('overrides').delete().eq('id', id);
-  if (error) { console.error('임시일정 삭제 실패:', error.message); throw error; }
-  removeOverrideFromCache(id);
+export async function deleteOverride(id, pin) {
+  try {
+    await callAdminWrite('deleteOverride', pin, { id });
+    removeOverrideFromCache(id);
+  } catch (err) {
+    console.error('임시일정 삭제 실패:', err.message);
+    throw err;
+  }
 }
 
 /** AI 분석 시간표 저장 (선생님당 1개, upsert) */
-export async function saveAiSchedule(teacherId, schedule) {
-  const { data, error } = await supabase
-    .from('ai_schedules')
-    .upsert({ teacher_id: teacherId, schedule, updated_at: new Date().toISOString() })
-    .select()
-    .single();
-  if (error) { console.error('AI 시간표 저장 실패:', error.message); throw error; }
-  upsertAiScheduleInCache(data);
+export async function saveAiSchedule(teacherId, schedule, pin) {
+  try {
+    const { updatedAt } = await callAdminWrite('saveAiSchedule', pin, { teacherId, schedule });
+    upsertAiScheduleInCache({ teacher_id: teacherId, schedule, updated_at: updatedAt });
+  } catch (err) {
+    console.error('AI 시간표 저장 실패:', err.message);
+    throw err;
+  }
 }
 
 /** 반 AI 시간표 저장 (반당 1개, upsert). class_id = "학년-반" 예: "1-5" */
-export async function saveClassAiSchedule(classId, schedule) {
-  const { data, error } = await supabase
-    .from('class_ai_schedules')
-    .upsert({ class_id: classId, schedule, updated_at: new Date().toISOString() })
-    .select()
-    .single();
-  if (error) { console.error('반 AI 시간표 저장 실패:', error.message); throw error; }
-  upsertClassAiScheduleInCache(data);
+export async function saveClassAiSchedule(classId, schedule, pin) {
+  try {
+    const { updatedAt } = await callAdminWrite('saveClassAiSchedule', pin, { classId, schedule });
+    upsertClassAiScheduleInCache({ class_id: classId, schedule, updated_at: updatedAt });
+  } catch (err) {
+    console.error('반 AI 시간표 저장 실패:', err.message);
+    throw err;
+  }
 }
