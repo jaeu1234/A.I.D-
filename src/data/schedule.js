@@ -86,7 +86,7 @@ export function shortName(name) {
 // officeFloor: 그 선생님이 소속된 교무실 층(3·4·5 중 하나). 수업이 없는 교시·점심에
 // 어느 층 교무실에 표시할지, 그리고 선택했을 때 어느 층으로 이동할지를 결정한다.
 // 생략하면 "층 자유"로 취급돼 보고 있는 층의 교무실마다 표시된다 — 아직 소속을
-// 확인하지 못한 선생님(2026-07-31 기준 12명)은 일부러 비워둔 것이니, 확인되는 대로
+// 확인하지 못한 선생님(2026-07-31 기준 8명)은 일부러 비워둔 것이니, 확인되는 대로
 // 채우면 된다. 값을 채우기 전까지는 그 선생님만 예전 동작이 유지된다.
 //
 // 출처: '2026학년도 1학기 1학년 시간표.hwpx' (1학년 1~10반 전체, 2026-07-08 입력).
@@ -95,7 +95,7 @@ export function shortName(name) {
 // 자율학습·동아리 시간은 담당 선생님 정보가 없어 채우지 않았다.
 export const TEACHERS = [
   {
-    id: 'RH', name: '류학철', subject: '실험실습', color: '#7b8fe8',
+    id: 'RH', name: '류학철', subject: '실험실습', color: '#7b8fe8', officeFloor: 5,
     schedule: buildSchedule([
       ['실험(1-7)', null, null, null, null, null, null, null],
       [null, null, null, null, null, null, null, null],
@@ -135,7 +135,7 @@ export const TEACHERS = [
     ]),
   },
   {
-    id: 'LJR', name: '이정란', subject: '국사', color: '#8ab0e0',
+    id: 'LJR', name: '이정란', subject: '국사', color: '#8ab0e0', officeFloor: 5,
     schedule: buildSchedule([
       [null, '국사(1-6)', '국사(1-8)', null, null, '국사(1-10)', null, '국사(1-9)'],
       [null, '국사(1-7)', null, '국사(1-9)', null, null, '국사(1-8)', null],
@@ -165,7 +165,7 @@ export const TEACHERS = [
     ]),
   },
   {
-    id: 'JE', name: '전일채', subject: '통합사회', color: '#b08ae0',
+    id: 'JE', name: '전일채', subject: '통합사회', color: '#b08ae0', officeFloor: 3,
     schedule: buildSchedule([
       [null, '통사(1-8)', '통사(1-7)', null, null, '통사(1-9)', '통사(1-4)', null],
       [null, '통사(1-6)', null, '통사(1-1)', null, null, '통사(1-10)', null],
@@ -225,7 +225,7 @@ export const TEACHERS = [
     ]),
   },
   {
-    id: 'LJH', name: '이진현', subject: '통합사회', color: '#5ae0c0',
+    id: 'LJH', name: '이진현', subject: '통합사회', color: '#5ae0c0', officeFloor: 3,
     schedule: buildSchedule([
       ['통사(1-6)', null, null, '통사(1-3)', null, null, null, null],
       ['통사(1-5)', '통사(1-2)', null, null, null, null, null, null],
