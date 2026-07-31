@@ -6,6 +6,7 @@ import {
   getNowMins, toMins,
 } from './time.js';
 import { resolveEndpoint, computeRoute, routePointAt } from './route.js';
+import { layoutRoom, PIN_R } from './pinLayout.js';
 
 // ─────────────────────────────────────────────
 // 카메라 상태 (외부에서 직접 변경 금지)
@@ -591,8 +592,6 @@ function _drawTraveler(ctx, x, y, color) {
   ctx.restore();
 }
 
-const PIN_R = 11; // 기본 핀 반지름 (선택 시 살짝 커짐)
-
 /**
  * 방별로 어떤 선생님이 있는지 묶어서 반환. { [roomId]: [{ t, loc }] }
  * 렌더링(_drawFloor 라벨 위치·_drawAllPins)과 클릭 판정(hitTestPin)이
@@ -609,48 +608,12 @@ function _computeOccupancy(floor, day, pi) {
   return byRoom;
 }
 
-/**
- * 한 방 안의 선생님들을 어떻게 그릴지 결정한다.
- * - 핀들이 한 줄로 방 너비에 들어가면 → 개별 핀을 가로로 나란히(row)
- * - 너무 많아 안 들어가면 → "N명" 클러스터 칩 하나로 묶음(cluster)
- *   단, 그 방에 선택된 선생님이 있으면 그 선생님 핀 + "+N" 배지로 표시해
- *   교무실처럼 다 모여 있어도 선택한 선생님은 또렷이 보이게 한다.
- * 반환: [{ kind:'pin'|'cluster'|'count', ... }]
- */
-function _layoutRoom(room, entries) {
-  const n     = entries.length;
-  const cx    = room.x + room.w / 2;
-  // 라벨을 위로 올렸으므로 핀은 방의 중앙보다 살짝 아래에 배치한다.
-  const yRow  = room.y + room.h * 0.60;
-  const gap   = 5;
-  const rowW  = n * (PIN_R * 2) + (n - 1) * gap;
-
-  // 한 줄에 여유 있게 들어가면 개별 핀을 가로로 나열
-  if (n <= 6 && rowW <= room.w - 10) {
-    const startX = cx - rowW / 2 + PIN_R;
-    return entries.map((e, i) => ({
-      kind: 'pin', t: e.t, loc: e.loc,
-      px: startX + i * (PIN_R * 2 + gap), py: yRow,
-    }));
-  }
-
-  // 붐비는 방 → 클러스터로 묶음
-  const sel = entries.find(e => e.t.id === _selectedId);
-  if (sel) {
-    return [
-      { kind: 'pin',   t: sel.t, loc: sel.loc, px: cx - 12, py: yRow },
-      { kind: 'count', n: n - 1, px: cx - 12 + PIN_R + 9, py: yRow - PIN_R - 1 },
-    ];
-  }
-  return [{ kind: 'cluster', n, px: cx, py: yRow }];
-}
-
 function _drawAllPins(ctx, occ) {
   const floor = FLOORS[_currentFloor];
   Object.entries(occ).forEach(([roomId, entries]) => {
     const room = floor.rooms.find(r => r.id === roomId);
     if (!room) return;
-    _layoutRoom(room, entries).forEach(item => {
+    layoutRoom(room, entries, _selectedId).forEach(item => {
       if (item.kind === 'pin')          _drawPin(ctx, item.px, item.py, item.t, item.loc, _selectedId === item.t.id);
       else if (item.kind === 'cluster') _drawCluster(ctx, item.px, item.py, item.n);
       else if (item.kind === 'count')   _drawCountBadge(ctx, item.px, item.py, item.n);
@@ -760,7 +723,7 @@ export function hitTestPin(sx, sy) {
   Object.entries(occ).forEach(([roomId, entries]) => {
     const room = floor.rooms.find(r => r.id === roomId);
     if (!room) return;
-    _layoutRoom(room, entries).forEach(item => { if (item.kind === 'pin') pins.push(item); });
+    layoutRoom(room, entries, _selectedId).forEach(item => { if (item.kind === 'pin') pins.push(item); });
   });
 
   // 나중에 그려진(위에 겹쳐진) 핀부터 검사해 화면상 위쪽 핀이 우선 선택되게 한다.

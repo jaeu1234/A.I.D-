@@ -1,0 +1,57 @@
+:root { --bg:#f4f5f8; --panel:#fff; --line:#e3e6ef; --text:#24272f; --muted:#8a90a0; --accent:#3b5bdb; }
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Malgun Gothic',sans-serif;
+  background:var(--bg); color:var(--text); }
+
+nav { display:flex; gap:4px; padding:10px 20px; background:var(--panel); border-bottom:1px solid var(--line); }
+nav a { padding:6px 14px; font-size:14px; font-weight:600; color:var(--muted); text-decoration:none; border-radius:7px; }
+nav a.active { background:var(--accent); color:#fff; }
+nav a:hover:not(.active) { background:#f0f2f8; }
+
+.wrap { max-width:900px; margin:0 auto; padding:24px 20px 60px; }
+h1 { font-size:22px; margin-bottom:4px; }
+.sub { color:var(--muted); font-size:13px; margin-bottom:20px; }
+
+.card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px; margin-bottom:20px; }
+.card h3 { font-size:15px; margin-bottom:14px; }
+.card h3 .step { display:inline-block; width:22px; height:22px; line-height:22px; text-align:center;
+  background:var(--accent); color:#fff; border-radius:50%; font-size:12px; margin-right:8px; }
+
+label.f { display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--muted); font-weight:600; margin-bottom:12px; }
+label.f select, label.f input { padding:9px 10px; font-size:14px; color:var(--text);
+  border:1px solid var(--line); border-radius:8px; outline:none; background:#fff; }
+label.f select:focus, label.f input:focus { border-color:var(--accent); }
+
+.row { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+.btn { padding:10px 20px; font-size:14px; font-weight:600; background:var(--accent); color:#fff;
+  border:none; border-radius:9px; cursor:pointer; }
+.btn:disabled { opacity:.5; cursor:not-allowed; }
+.btn-ghost { background:#eef1f8; color:var(--text); }
+
+.warn { font-size:12px; color:#b8860b; background:#fff8e1; border:1px solid #f0e0a0;
+  border-radius:8px; padding:8px 12px; margin-top:10px; }
+.status { font-size:13px; margin-top:10px; min-height:18px; }
+.status.err { color:#c0392b; }
+.status.ok { color:#2d7a4f; }
+
+.preview { max-width:100%; max-height:280px; border-radius:10px; border:1px solid var(--line); margin-top:12px; display:none; }
+
+table.edit { width:100%; border-collapse:collapse; font-size:12px; }
+table.edit th, table.edit td { border:1px solid var(--line); padding:2px; text-align:center; }
+table.edit th { background:#f7f8fc; color:var(--muted); font-weight:600; padding:6px 4px; }
+table.edit input { width:100%; min-width:56px; border:none; text-align:center; font-size:12px; padding:5px 2px; outline:none; background:transparent; }
+table.edit input:focus { background:#eef2ff; }
+.hidden { display:none; }
+.hint { color:var(--muted); font-size:12px; margin-bottom:10px; }
+
+/* PIN 게이트 */
+.gate { max-width:340px; margin:80px auto; background:var(--panel); border:1px solid var(--line);
+  border-radius:14px; padding:32px 28px; text-align:center; }
+.gate h2 { font-size:18px; margin-bottom:6px; }
+.gate p { color:var(--muted); font-size:13px; margin-bottom:18px; }
+.gate input { width:100%; padding:11px; font-size:18px; text-align:center; letter-spacing:6px;
+  border:1px solid var(--line); border-radius:9px; outline:none; }
+.gate input:focus { border-color:var(--accent); }
+.gate button { width:100%; margin-top:14px; padding:11px; font-size:15px; font-weight:600;
+  background:var(--accent); color:#fff; border:none; border-radius:9px; cursor:pointer; }
+.gate .err { color:#c0392b; font-size:13px; margin-top:10px; min-height:18px; }
