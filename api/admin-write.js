@@ -8,6 +8,7 @@
 // 키로만 수행하고(RLS는 supabase_schema.sql에서 anon 쓰기를 막도록 갱신됨),
 // 브라우저는 이 함수 하나만 호출한다.
 const { restRequest } = require('./_lib/supabaseAdmin');
+const { readKey } = require('./_lib/env');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -15,9 +16,13 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const adminPin = process.env.ADMIN_PIN;
-  if (!adminPin) {
-    res.status(500).json({ error: '서버에 ADMIN_PIN 환경변수가 설정되어 있지 않습니다.' });
+  // readKey는 값에 섞여 들어온 BOM·공백을 걷어낸다 — 안 걸러내면 PIN이 절대
+  // 안 맞는 것처럼 보이는데 원인은 화면에 전혀 드러나지 않는다(_lib/env.js 참고).
+  let adminPin;
+  try {
+    adminPin = readKey('ADMIN_PIN');
+  } catch (err) {
+    res.status(500).json({ error: err.message });
     return;
   }
 

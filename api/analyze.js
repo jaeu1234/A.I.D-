@@ -46,9 +46,11 @@ module.exports = async function handler(req, res) {
   // upload.html의 PIN 게이트는 UI만 막을 뿐, 이 검증이 없으면 누구나 PIN 없이
   // 직접 이 엔드포인트를 호출해 유료 Anthropic API를 무제한으로 소모할 수 있었다
   // (admin-write.js/verify-pin.js와 동일한 서버측 재검증 패턴을 여기도 적용).
-  const adminPin = process.env.ADMIN_PIN;
-  if (!adminPin) {
-    res.status(500).json({ error: '서버에 ADMIN_PIN 환경변수가 설정되어 있지 않습니다.' });
+  let adminPin;
+  try {
+    adminPin = readKey('ADMIN_PIN');
+  } catch (err) {
+    res.status(500).json({ error: err.message });
     return;
   }
 
