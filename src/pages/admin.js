@@ -3,6 +3,7 @@ import { FLOORS } from '../data/floors.js';
 import { loadOverrides, addOverride, deleteOverride, getEffectiveSchedule, initSync } from '../lib/location.js';
 import { getLocalDateStr } from '../lib/time.js';
 import { escapeHtml } from '../lib/html.js';
+import { initPinGate } from '../lib/pinGate.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -11,35 +12,11 @@ const $ = (id) => document.getElementById(id);
 // 매번 PIN을 다시 입력받지 않기 위한 UX 편의일 뿐이다.
 let adminPin = null;
 
-// ── PIN 게이트 ──────────────────
-async function tryPin() {
-  const candidate = $('pin').value;
-  $('pinBtn').disabled = true;
-  try {
-    const res = await fetch('/api/verify-pin', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ pin: candidate }),
-    });
-    const data = await res.json();
-    if (res.ok && data.ok) {
-      adminPin = candidate;
-      $('gate').classList.add('hidden');
-      $('app').classList.remove('hidden');
-      await initSync(() => { renderOverrides(); renderSummary(); });
-      initApp();
-    } else {
-      $('pinErr').textContent = data.error || 'PIN이 올바르지 않습니다.';
-      $('pin').value = '';
-    }
-  } catch (err) {
-    $('pinErr').textContent = `확인 실패: ${err.message}`;
-  } finally {
-    $('pinBtn').disabled = false;
-  }
-}
-$('pinBtn').onclick = tryPin;
-$('pin').addEventListener('keydown', e => { if (e.key === 'Enter') tryPin(); });
+initPinGate(async (pin) => {
+  adminPin = pin;
+  await initSync(() => { renderOverrides(); renderSummary(); });
+  initApp();
+});
 
 // ── 앱 초기화 ──────────────────
 function initApp() {

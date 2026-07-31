@@ -1,0 +1,12 @@
+/* admin.html/upload.html 공용 PIN 게이트 컴포넌트.
+   두 파일이 완전히 동일한 .gate 스타일을 각자 갖고 있던 걸 하나로 모았다. */
+.gate { max-width:340px; margin:80px auto; background:var(--panel); border:1px solid var(--line);
+  border-radius:14px; padding:32px 28px; text-align:center; }
+.gate h2 { font-size:18px; margin-bottom:6px; }
+.gate p { color:var(--muted); font-size:13px; margin-bottom:18px; }
+.gate input { width:100%; padding:11px; font-size:18px; text-align:center; letter-spacing:6px;
+  border:1px solid var(--line); border-radius:9px; outline:none; }
+.gate input:focus { border-color:var(--accent); }
+.gate button { width:100%; margin-top:14px; padding:11px; font-size:15px; font-weight:600;
+  background:var(--accent); color:#fff; border:none; border-radius:9px; cursor:pointer; }
+.gate .err { color:#c0392b; font-size:13px; margin-top:10px; min-height:18px; }

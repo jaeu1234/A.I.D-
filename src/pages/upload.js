@@ -1,6 +1,7 @@
 import { TEACHERS, PERIODS, DAYS } from '../data/schedule.js';
 import { getAllClassrooms } from '../data/floors.js';
 import { saveAiSchedule, saveClassAiSchedule } from '../lib/location.js';
+import { initPinGate } from '../lib/pinGate.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -11,33 +12,7 @@ let currentMode = 'teacher'; // 'teacher' | 'class'
 // /api/admin-write가 서버에서 다시 검증하는 데서 나온다.
 let adminPin = null;
 
-// ── PIN 게이트 ──────────────────
-async function tryPin() {
-  const candidate = $('pin').value;
-  $('pinBtn').disabled = true;
-  try {
-    const res = await fetch('/api/verify-pin', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ pin: candidate }),
-    });
-    const data = await res.json();
-    if (res.ok && data.ok) {
-      adminPin = candidate;
-      $('gate').classList.add('hidden');
-      $('app').classList.remove('hidden');
-    } else {
-      $('pinErr').textContent = data.error || 'PIN이 올바르지 않습니다.';
-      $('pin').value = '';
-    }
-  } catch (err) {
-    $('pinErr').textContent = `확인 실패: ${err.message}`;
-  } finally {
-    $('pinBtn').disabled = false;
-  }
-}
-$('pinBtn').onclick = tryPin;
-$('pin').addEventListener('keydown', e => { if (e.key === 'Enter') tryPin(); });
+initPinGate((pin) => { adminPin = pin; });
 
 // ── 선생님 select ──────────────
 $('teacher').innerHTML = TEACHERS
