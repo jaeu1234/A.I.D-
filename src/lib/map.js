@@ -18,10 +18,19 @@ let _canvas       = null;
 // 이동 점 진행률 override. null이면 현재 시각(쉬는 시간 경과)에서 계산한다.
 // index.html이 선택 직후 인트로 스윕(0→실진행률)을 재생할 때만 값을 넣는다.
 let _routeProgress = null;
+// 예측 모드: [day, periodIdx] 오버라이드. null이면 실시간(getTodayIndex/getCurrentPeriodIndex).
+// predict.html이 임의의 요일·교시를 골랐을 때 켜서, render()·hitTestPin()이 그 시점
+// 기준 occupancy를 그리도록 한다. 실시간 전제인 이동 경로(_drawTeacherRoute)는
+// 예측 모드에서 의미가 없으므로 이때는 그리지 않는다.
+let _predictDayPi = null;
 
 export function getCamera() { return { x: _camX, y: _camY, z: _camZ }; }
 export function setSelectedId(id) { _selectedId = id; }
 export function setRouteProgress(p) { _routeProgress = p; }
+/** 예측 모드 켜기: 이후 render()·hitTestPin()이 이 [day, periodIdx] 기준으로 그려진다. */
+export function setPredictionContext(day, periodIdx) { _predictDayPi = [day, periodIdx]; }
+/** 예측 모드 끄기: render()·hitTestPin()이 다시 실시간 기준으로 돌아간다. */
+export function clearPredictionContext() { _predictDayPi = null; }
 
 // ─────────────────────────────────────────────
 // 초기화
@@ -193,12 +202,16 @@ export function render() {
 
   // 방별 선생님 점유 현황을 한 번만 계산해 라벨 위치(_drawFloor)와
   // 핀/클러스터 배치(_drawAllPins)가 동일한 기준을 쓰도록 공유한다.
+  // 예측 모드(_predictDayPi)면 고른 요일·교시 기준으로, 아니면 실시간 기준으로.
   const floor = FLOORS[_currentFloor];
-  const occ   = floor ? _computeOccupancy(floor, getTodayIndex(), getCurrentPeriodIndex()) : {};
+  const [day, pi] = _predictDayPi ?? [getTodayIndex(), getCurrentPeriodIndex()];
+  const occ   = floor ? _computeOccupancy(floor, day, pi) : {};
 
   _drawFloor(ctx, occ);
 
-  if (_selectedId) {
+  // 이동 경로는 실시간 진행률 전제라 예측 모드에선 그리지 않는다(그릴 경우
+  // 실제 "지금" 기준 경로가 예측 시점 핀 위에 겹쳐 보여 오해를 줄 수 있다).
+  if (_selectedId && !_predictDayPi) {
     _drawTeacherRoute(ctx, _selectedId);
   }
   _drawAllPins(ctx, occ);
@@ -738,7 +751,8 @@ function _drawCountBadge(ctx, px, py, n) {
 export function hitTestPin(sx, sy) {
   const w     = s2w(sx, sy);
   const floor = FLOORS[_currentFloor];
-  const occ   = _computeOccupancy(floor, getTodayIndex(), getCurrentPeriodIndex());
+  const [day, pi] = _predictDayPi ?? [getTodayIndex(), getCurrentPeriodIndex()];
+  const occ   = _computeOccupancy(floor, day, pi);
 
   // _drawAllPins와 동일한 배치를 재현해, 실제로 그려진 개별 핀만 클릭 대상으로 삼는다.
   // 클러스터("N명")는 대표 표시일 뿐이라 클릭 대상에서 제외(선택은 좌측 목록으로).
