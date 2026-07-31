@@ -70,7 +70,9 @@ function onPredictChange() {
   applyPredictionContext();
   updateSummary();
   render();
-  if (selectedId) moveToSelected();
+  // 정보 패널도 같이 다시 그려야 한다. moveToSelected()는 지도만 옮기므로,
+  // 이게 빠지면 요일·시각을 바꿔도 패널엔 이전 시점의 시간표가 그대로 남는다.
+  if (selectedId) { moveToSelected(); renderInfo(); }
   buildTeacherList($('search').value);
 }
 
