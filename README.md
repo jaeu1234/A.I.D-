@@ -35,7 +35,7 @@ teacher-map-v2/
 │
 ├── api/                  → Vercel 서버리스 함수 (이 폴더만 자동으로 함수 라우트가 됨)
 │   ├── _lib/supabaseAdmin.js  → service_role 키로 Supabase REST 직접 호출 (앞에 _가 붙어 라우트 제외)
-│   ├── analyze.js             → 시간표 사진 → Claude API 분석 (ANTHROPIC_API_KEY는 여기서만 사용, PIN 서버 검증 포함)
+│   ├── analyze.js             → 시간표 사진 → OpenAI API 분석 (OPENAI_API_KEY는 여기서만 사용, PIN 서버 검증 포함)
 │   ├── verify-pin.js          → PIN 게이트 즉시 확인용(그 자체로 쓰기 권한을 주지 않음)
 │   └── admin-write.js         → 임시일정·AI 시간표 실제 쓰기 (PIN 서버 검증 + service_role)
 │
@@ -56,8 +56,9 @@ teacher-map-v2/
 - **언어**: 바닐라 HTML/CSS/JavaScript (프론트엔드는 빌드 과정 없음. `package.json`은 npm install
   대상이 아니라 Dependabot이 CDN 고정 버전을 추적하게 하기 위한 문서용 파일)
 - **렌더링**: Canvas 2D API (평면도, 핀, 동선 화살표)
-- **AI**: Anthropic Claude API `claude-sonnet-4-6` (시간표 사진 분석). API 키는 브라우저에 두지 않고
-  서버리스 함수(`api/analyze.js`)가 환경변수(`ANTHROPIC_API_KEY`)로 보관·호출을 대신함
+- **AI**: OpenAI API `gpt-4.1` (시간표 사진 분석, vision + structured outputs). API 키는 브라우저에 두지 않고
+  서버리스 함수(`api/analyze.js`)가 환경변수(`OPENAI_API_KEY`)로 보관·호출을 대신함.
+  `gpt-5`도 같은 요청 형식을 지원하지만 응답이 느려(빈 이미지에도 12초대) 함수 실행 시간 제한에 걸린다
 - **저장**: Supabase(Postgres + Realtime) — 임시일정·AI 시간표. anon key는 **읽기 전용**(RLS)이고,
   실제 쓰기는 `api/admin-write.js`가 PIN을 서버에서 검증한 뒤 service_role 키로만 수행함
 - **관리자 인증**: PIN은 클라이언트에 두지 않고 서버 환경변수(`ADMIN_PIN`)로만 존재.
@@ -75,7 +76,7 @@ teacher-map-v2/
 ### 배포 전 필요한 설정
 
 1. **Vercel 프로젝트 환경변수**에 아래 세 개를 등록:
-   - `ANTHROPIC_API_KEY` — 시간표 사진 분석용
+   - `OPENAI_API_KEY` — 시간표 사진 분석용
    - `ADMIN_PIN` — 관리자 페이지 PIN (기존에 클라이언트에 노출됐던 값은 이미 git 히스토리에 남아있으니
      그대로 쓰지 말고 새 값으로 교체 권장)
    - `SUPABASE_SERVICE_ROLE_KEY` — Supabase 프로젝트 설정 → API → service_role 키 (⚠️ anon key와
@@ -118,7 +119,7 @@ AI 분석 시간표 (Supabase: ai_schedules 테이블, 기기 간 Realtime 동�
 
 ### upload.html (시간표 업로드)
 - 선생님/반 시간표 모드 전환, 시간표 사진 업로드·미리보기
-- 사진을 서버리스 함수(`api/analyze.js`)로 전송 → 그 함수가 Claude API를 호출해 요일×교시 표로 자동 파싱
+- 사진을 서버리스 함수(`api/analyze.js`)로 전송 → 그 함수가 OpenAI API를 호출해 요일×교시 표로 자동 파싱
   (API 키는 서버 환경변수에만 있고 브라우저에는 노출되지 않음)
 - 파싱 결과 셀 단위 수정 후 Supabase 저장
 
@@ -167,7 +168,7 @@ AI 분석 시간표 (Supabase: ai_schedules 테이블, 기기 간 Realtime 동�
    - PIN을 서버 환경변수(`ADMIN_PIN`)로 옮기고, 쓰기는 `api/admin-write.js`가 PIN을 서버에서
      재검증한 뒤 service_role 키로만 수행하도록 변경. RLS도 anon엔 읽기만 허용하도록 하드닝
      (`supabase_schema.sql`의 마이그레이션 블록). upload.html에도 같은 PIN 게이트 추가(예전엔 없었음)
-   - `api/analyze.js`에는 이 검증이 빠져있어(PIN 없이 유료 Claude API 호출 가능) 뒤늦게 발견,
+   - `api/analyze.js`에는 이 검증이 빠져있어(PIN 없이 유료 AI API 호출 가능) 뒤늦게 발견,
      같은 방식으로 서버 검증 추가
 
 8. ~~시간표 파싱 정규식 취약~~ ✅ 완료
