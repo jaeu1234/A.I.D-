@@ -1,4 +1,4 @@
-import { PERIODS, DAYS, TEACHERS } from '../data/schedule.js';
+import { PERIODS, DAYS, TEACHERS, shortName } from '../data/schedule.js';
 import { FLOORS } from '../data/floors.js';
 import { getCurrentPeriodIndex, getTodayIndex } from '../lib/time.js';
 import { getTeacherLocation, resolveRoom, initSync } from '../lib/location.js';
@@ -163,7 +163,7 @@ function buildTeacherList(filter = '') {
       div.className = 'teacher-item' + (t.id === selectedId ? ' active' : '');
       div.onclick = () => selectTeacher(t.id);
       div.innerHTML = `
-        <div class="teacher-dot" style="background:${t.color}">${t.id}</div>
+        <div class="teacher-dot" style="background:${t.color}">${shortName(t.name)}</div>
         <div class="teacher-meta">
           <div class="name">${t.name}</div>
           <div class="sub">${t.subject}</div>

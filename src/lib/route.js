@@ -81,9 +81,13 @@ function polylineLength(pts) {
 export function resolveEndpoint(loc, hintFloor) {
   if (!loc || !loc.room) return null;
   if (loc.room === 'office') {
-    // 힌트 층에 교무실이 있으면 그 층, 없으면 교무실이 있는 층 중 힌트에 가장 가까운 층.
+    // 선생님 소속 교무실 층(officeFloor)이 정해져 있으면 그 층이 우선 — 힌트로 덮어쓰면
+    // 지도에 그려지는 층과 경로의 출발/도착 층이 어긋난다.
+    // 미지정(loc.floor == null)이면 예전대로: 힌트 층에 교무실이 있으면 그 층,
+    // 없으면 교무실이 있는 층 중 힌트에 가장 가까운 층.
     const officeFloors = Object.keys(OFFICE_IDS).map(Number);
-    let floor = OFFICE_IDS[hintFloor] ? hintFloor : null;
+    let floor = loc.floor != null && OFFICE_IDS[loc.floor] ? loc.floor : null;
+    if (floor == null) floor = OFFICE_IDS[hintFloor] ? hintFloor : null;
     if (floor == null) {
       officeFloors.sort((a, b) => Math.abs(a - hintFloor) - Math.abs(b - hintFloor));
       floor = officeFloors[0];

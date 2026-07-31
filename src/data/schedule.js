@@ -65,12 +65,29 @@ export function parseClassScheduleCell(raw) {
   return { subject: raw, teacherName: '', teacherId: null, label: raw };
 }
 
+/**
+ * 지도 핀·목록 아이콘처럼 좁은 자리에 넣을 이름 축약형.
+ * 성을 뺀 이름 두 글자를 쓴다(류학철 → 학철). 두 글자 이하 이름은 그대로 둔다(양설).
+ * 예전엔 영문 이니셜(id: 'RH')을 그대로 노출해서 누구인지 알아볼 수 없었다.
+ * id는 데이터 키로만 남기고 화면에는 쓰지 않는다.
+ */
+export function shortName(name) {
+  if (!name) return '';
+  return name.length > 2 ? name.slice(-2) : name;
+}
+
 // ─────────────────────────────────────────────
 // 선생님 기본 시간표
 // schedule[요일(0=월)][교시(0=1교시)] = ClassCell | null
 // 원본은 '과목(학년-반)' 문자열로 작성하고 buildSchedule()로 정규화한다.
 // TODO: AI 업로드 또는 관리자 수정으로 localStorage에서 덮어씀
 // ─────────────────────────────────────────────
+// officeFloor: 그 선생님이 소속된 교무실 층(3·4·5 중 하나). 수업이 없는 교시·점심에
+// 어느 층 교무실에 표시할지, 그리고 선택했을 때 어느 층으로 이동할지를 결정한다.
+// 생략하면 "층 자유"로 취급돼 보고 있는 층의 교무실마다 표시된다 — 아직 소속을
+// 확인하지 못한 선생님(2026-07-31 기준 12명)은 일부러 비워둔 것이니, 확인되는 대로
+// 채우면 된다. 값을 채우기 전까지는 그 선생님만 예전 동작이 유지된다.
+//
 // 출처: '2026학년도 1학기 1학년 시간표.hwpx' (1학년 1~10반 전체, 2026-07-08 입력).
 // 반 시간표 10개를 모두 합쳐 선생님별 시간표로 재구성했으므로, 각 선생님이
 // 1학년 전체에서 가르치는 시간이 전부 반영되어 있다 (다른 학년 시간표는 미포함).
@@ -87,7 +104,7 @@ export const TEACHERS = [
     ]),
   },
   {
-    id: 'HM', name: '홍민지', subject: '수학', color: '#4db58a',
+    id: 'HM', name: '홍민지', subject: '수학', color: '#4db58a', officeFloor: 4,
     schedule: buildSchedule([
       [null, '수학(1-5)', null, '수학(1-8)', null, '수학(1-7)', null, '수학(1-6)'],
       ['수학(1-7)', null, '수학(1-6)', '수학(1-8)', null, null, null, null],
@@ -107,7 +124,7 @@ export const TEACHERS = [
     ]),
   },
   {
-    id: 'KS', name: '김선희', subject: '정보', color: '#d57eb0',
+    id: 'KS', name: '김선희', subject: '정보', color: '#d57eb0', officeFloor: 5,
     schedule: buildSchedule([
       [null, null, '정보(1-1)', '정보(1-4)', null, null, '정보(1-2)', null],
       ['정보(1-3)', '정보(1-4)', null, null, null, '정보(1-1)', '정보(1-5)', null],
@@ -127,7 +144,7 @@ export const TEACHERS = [
     ]),
   },
   {
-    id: 'JH', name: '장화순', subject: '통합과학', color: '#6dc4b0',
+    id: 'JH', name: '장화순', subject: '통합과학', color: '#6dc4b0', officeFloor: 3,
     schedule: buildSchedule([
       [null, '통과(1-7)', null, null, null, null, '통과(1-9)', '통과(1-2)'],
       [null, null, null, null, null, null, null, '통과(1-6)'],
@@ -137,7 +154,7 @@ export const TEACHERS = [
     ]),
   },
   {
-    id: 'CS', name: '최성욱', subject: '체육', color: '#e0895a',
+    id: 'CS', name: '최성욱', subject: '체육', color: '#e0895a', officeFloor: 5,
     schedule: buildSchedule([
       [null, null, '체육(1-9)', null, null, '체육(1-6)', null, '체육(1-7)'],
       [null, null, '체육(1-9)', null, null, '체육(1-8)', null, '체육(1-10)'],
@@ -157,7 +174,7 @@ export const TEACHERS = [
     ]),
   },
   {
-    id: 'KD', name: '김동억', subject: '국어', color: '#5ac0e0',
+    id: 'KD', name: '김동억', subject: '국어', color: '#5ac0e0', officeFloor: 3,
     schedule: buildSchedule([
       [null, '국어(1-9)', null, null, null, null, '국어(1-7)', '국어(1-10)'],
       ['국어(1-8)', null, '국어(1-7)', null, null, '국어(1-9)', '국어(1-6)', null],
@@ -167,7 +184,7 @@ export const TEACHERS = [
     ]),
   },
   {
-    id: 'CG', name: '최기쁨', subject: '통합과학', color: '#e0b05a',
+    id: 'CG', name: '최기쁨', subject: '통합과학', color: '#e0b05a', officeFloor: 3,
     schedule: buildSchedule([
       ['통과(1-5)', null, null, '통과(1-6)', null, null, '통과(1-8)', null],
       ['통과(1-1)', null, null, '통과(1-10)', null, null, null, null],
@@ -177,7 +194,7 @@ export const TEACHERS = [
     ]),
   },
   {
-    id: 'KW', name: '곽삼웅', subject: '통합과학·실험실습', color: '#8ae0a0',
+    id: 'KW', name: '곽삼웅', subject: '통합과학·실험실습', color: '#8ae0a0', officeFloor: 5,
     schedule: buildSchedule([
       [null, '실험(1-2)', '실험(1-6)', null, null, null, '실험(1-1)', null],
       [null, '실험(1-3)', '통과(1-4)', null, null, '통과(1-2)', '통과(1-9)', null],
@@ -187,7 +204,7 @@ export const TEACHERS = [
     ]),
   },
   {
-    id: 'YS', name: '양설', subject: '영어', color: '#e07a7a',
+    id: 'YS', name: '양설', subject: '영어', color: '#e07a7a', officeFloor: 3,
     schedule: buildSchedule([
       [null, '영어(1-10)', null, '영어(1-7)', null, null, null, '영어(1-8)'],
       ['영어(1-9)', null, '영어(1-10)', null, null, '영어(1-6)', null, '영어(1-7)'],
@@ -217,7 +234,7 @@ export const TEACHERS = [
     ]),
   },
   {
-    id: 'EY', name: '엄유진', subject: '통합과학', color: '#d5a05a',
+    id: 'EY', name: '엄유진', subject: '통합과학', color: '#d5a05a', officeFloor: 3,
     schedule: buildSchedule([
       ['통과(1-1)', '통과(1-3)', null, null, null, null, null, null],
       [null, '통과(1-8)', null, null, null, null, '통과(1-7)', null],
@@ -227,7 +244,7 @@ export const TEACHERS = [
     ]),
   },
   {
-    id: 'KHY', name: '강혜영', subject: '정보', color: '#e0a5d5',
+    id: 'KHY', name: '강혜영', subject: '정보', color: '#e0a5d5', officeFloor: 3,
     schedule: buildSchedule([
       ['정보(1-9)', null, null, null, null, '정보(1-8)', '정보(1-10)', null],
       ['정보(1-10)', null, '정보(1-8)', null, null, '정보(1-7)', null, '정보(1-9)'],
@@ -247,7 +264,7 @@ export const TEACHERS = [
     ]),
   },
   {
-    id: 'KJI', name: '김종인', subject: '국어', color: '#c5a5e0',
+    id: 'KJI', name: '김종인', subject: '국어', color: '#c5a5e0', officeFloor: 5,
     schedule: buildSchedule([
       [null, '국어(1-4)', null, null, null, '국어(1-2)', null, null],
       ['국어(1-4)', null, '국어(1-2)', '국어(1-5)', null, null, '국어(1-1)', null],
@@ -277,7 +294,7 @@ export const TEACHERS = [
     ]),
   },
   {
-    id: 'BKJ', name: '백광재', subject: '수학', color: '#d5e0a5',
+    id: 'BKJ', name: '백광재', subject: '수학', color: '#d5e0a5', officeFloor: 4,
     schedule: buildSchedule([
       [null, null, '수학(1-10)', '수학(1-9)', null, null, null, null],
       [null, '수학(1-5)', null, '수학(1-4)', null, '수학(1-10)', null, null],
@@ -297,7 +314,7 @@ export const TEACHERS = [
     ]),
   },
   {
-    id: 'LNH', name: '이나현', subject: '통합사회', color: '#a5e0e0',
+    id: 'LNH', name: '이나현', subject: '통합사회', color: '#a5e0e0', officeFloor: 4,
     schedule: buildSchedule([
       ['통사(1-10)', null, '통사(1-5)', null, null, '통사(1-3)', null, '통사(1-1)'],
       [null, '통사(1-9)', null, '통사(1-7)', null, '통사(1-4)', null, null],
@@ -307,7 +324,7 @@ export const TEACHERS = [
     ]),
   },
   {
-    id: 'LMY', name: '이미영', subject: '국사', color: '#c5e0a5',
+    id: 'LMY', name: '이미영', subject: '국사', color: '#c5e0a5', officeFloor: 5,
     schedule: buildSchedule([
       [null, null, '국사(1-4)', null, null, '국사(1-1)', null, '국사(1-5)'],
       [null, null, '국사(1-3)', '국사(1-2)', null, null, '국사(1-4)', '국사(1-5)'],
