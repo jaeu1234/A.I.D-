@@ -309,7 +309,7 @@
     let predictDay = getTodayIndex();      // 0=월 ~ 4=금
     const _now = new Date();
     let predictHour = _now.getHours();     // 0~23 (24시간제 — 오전/오후 없음)
-    let predictMin  = Math.floor(_now.getMinutes() / 10) * 10; // 10분 단위로 반올림
+    let predictMin  = _now.getMinutes(); // 0~59 (24시간제 — 오전/오후 없음)
 
     const $ = (id) => document.getElementById(id);
     const canvas = $('map');
@@ -397,7 +397,7 @@
       hourSel.value = predictHour;
 
       const minSel = $('predictMin');
-      for (let m = 0; m < 60; m += 10) {
+      for (let m = 0; m < 60; m++) {
         const opt = document.createElement('option');
         opt.value = m;
         opt.textContent = String(m).padStart(2, '0') + '분';
