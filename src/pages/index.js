@@ -2,7 +2,7 @@ import { PERIODS, DAYS, TEACHERS, shortName } from '../data/schedule.js';
 import { FLOORS, getAllClassrooms, findRoomFloor } from '../data/floors.js';
 import {
   getCurrentPeriodIndex, getBreakAfterIndex, getTodayIndex, isWeekend, toMins,
-  getPeriodStatusLabel,
+  getPeriodStatusLabel, nowDate, setNowOverride,
 } from '../lib/time.js';
 import {
   getTeacherLocation, buildTimeline, getNextMove, resolveRoom, getClassSchedule, initSync,
@@ -22,6 +22,54 @@ let currentFloor = 1;
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('map');
+
+// ── 데모용 시각 이동 (?now=) ───────
+// 방과 후·주말에는 진행 중인 교시가 없어 화면이 "쉬는 시간"만 표시하고 핀도
+// 찍히지 않는다. 시연 영상을 찍을 때 수업 중 화면을 보여줄 수 있도록,
+// 쿼리 파라미터로 "지금"을 옮긴다. 파라미터가 없으면 평소와 완전히 동일하다.
+//
+//   index.html?now=09:45              → 오늘 09:45 (2교시)
+//   index.html?now=2026-08-03T09:45   → 그 날짜·시각 (요일까지 바꿔야 할 때)
+//   index.html?now=09:45&badge=0      → 시각 이동 표시를 숨김(영상에 안 나오게)
+//
+// 시각을 한 점에 고정하는 게 아니라 실제 시각과의 차이만 주므로, 시계도 계속
+// 흐르고 쉬는 시간 이동 애니메이션도 정상적으로 재생된다.
+function applyDemoTimeFromQuery() {
+  const params = new URLSearchParams(location.search);
+  const raw = params.get('now');
+  if (!raw) return;
+
+  const target = raw.includes('T') || raw.includes('-')
+    ? new Date(raw)
+    : (() => {
+        const [hh, mm] = raw.split(':').map(Number);
+        if (Number.isNaN(hh) || Number.isNaN(mm)) return new Date(NaN);
+        const d = new Date();
+        d.setHours(hh, mm, 0, 0);
+        return d;
+      })();
+
+  if (Number.isNaN(target.getTime())) {
+    console.warn(`[demo] ?now=${raw} 를 시각으로 해석하지 못했습니다. 실제 시각을 씁니다.`);
+    return;
+  }
+  setNowOverride(target);
+  if (params.get('badge') !== '0') showDemoBadge();
+}
+
+// 시각이 옮겨진 상태를 화면에 남겨, 나중에 이 화면을 보는 사람이 실제 시각으로
+// 착각하지 않게 한다. 영상에 넣기 싫으면 &badge=0.
+function showDemoBadge() {
+  const el = document.createElement('span');
+  el.textContent = '시각 이동 중';
+  el.title = '?now= 파라미터로 시각을 옮긴 상태입니다. 실제 시각이 아닙니다.';
+  el.style.cssText = 'margin-left:8px;padding:4px 10px;border-radius:20px;'
+    + 'font-size:11px;font-weight:700;white-space:nowrap;'
+    + 'color:#8a5a00;background:#fff3d6;border:1px solid #ffe1a1;';
+  $('clock').insertAdjacentElement('afterend', el);
+}
+
+applyDemoTimeFromQuery();
 
 // ── 초기화 ────────────────────────
 // 다른 기기(관리자 임시일정 등록, AI 시간표 업로드)의 변경이 Realtime으로
@@ -242,7 +290,7 @@ function followTravelerFloor() {
 function scheduleNextBreak() {
   const pi = getCurrentPeriodIndex();
   if (pi < 0) return; // 쉬는 시간·방과후엔 예약 안 함
-  const now = new Date();
+  const now = nowDate();
   const nowMs = (now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()) * 1000;
   const endMs = toMins(PERIODS[pi].end) * 60000;
   const wait = Math.max(endMs - nowMs, 0) + 500;
@@ -377,7 +425,7 @@ function renderInfo() {
 
 // ── 시계 · 교시 뱃지 ──────────────
 function updateClock() {
-  const now = new Date();
+  const now = nowDate();
   const hh = String(now.getHours()).padStart(2, '0');
   const mm = String(now.getMinutes()).padStart(2, '0');
   const weekendNote = isWeekend() ? ' · 주말(월요일 시간표 기준)' : '';

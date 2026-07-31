@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   toMins, getNowMins, getCurrentPeriodIndex, getNextPeriodIndex,
+  setNowOverride, isNowOverridden, nowDate,
   getBreakAfterIndex, getTodayIndex, isWeekend, getLocalDateStr,
   getPeriodStatusLabel,
 } from '../src/lib/time.js';
@@ -69,4 +70,54 @@ test('getLocalDateStr: 자정 근처에도 UTC로 밀리지 않고 로컬 날짜
   // toISOString()을 썼다면 한국(UTC+9) 새벽 0~9시엔 하루 전 날짜가 나왔을 상황을 재현
   const d = new Date(2026, 6, 31, 0, 30); // 2026-07-31 00:30 (로컬)
   assert.equal(getLocalDateStr(d), '2026-07-31');
+});
+
+// ── 데모용 시각 이동 (setNowOverride) ────────
+// 시연 영상용 기능이지만 "지금"의 기준을 바꾸므로, 안 켰을 때 예전과 똑같이
+// 동작하는지와 되돌리기가 확실히 되는지는 테스트로 묶어둔다.
+
+test('setNowOverride: 켜지 않으면 실제 시각을 쓰고 isNowOverridden은 false', () => {
+  setNowOverride(null);
+  assert.equal(isNowOverridden(), false);
+  assert.ok(Math.abs(nowDate().getTime() - Date.now()) < 1000);
+});
+
+test('setNowOverride: 옮긴 시각 기준으로 교시가 판정된다', () => {
+  const t = new Date();
+  t.setHours(9, 45, 0, 0); // 2교시(09:30~10:20)
+  setNowOverride(t);
+  try {
+    assert.equal(isNowOverridden(), true);
+    assert.equal(getCurrentPeriodIndex(), 1);
+    assert.equal(getNowMins(), 9 * 60 + 45);
+  } finally {
+    setNowOverride(null); // 다른 테스트에 새지 않게 반드시 되돌린다
+  }
+});
+
+test('setNowOverride: 날짜까지 주면 요일·로컬 날짜도 따라간다', () => {
+  setNowOverride(new Date(2026, 7, 3, 13, 30)); // 2026-08-03(월) 13:30
+  try {
+    assert.equal(getTodayIndex(), 0, '월요일');
+    assert.equal(getLocalDateStr(), '2026-08-03');
+  } finally {
+    setNowOverride(null);
+  }
+});
+
+test('setNowOverride: null로 되돌리면 실제 시각으로 복귀', () => {
+  setNowOverride(new Date(2026, 7, 3, 13, 30));
+  setNowOverride(null);
+  assert.equal(isNowOverridden(), false);
+  assert.ok(Math.abs(nowDate().getTime() - Date.now()) < 1000);
+});
+
+test('setNowOverride: 인자로 시각을 직접 넘기면 override와 무관하게 그 시각을 쓴다', () => {
+  // 기존 테스트들이 쓰는 주입 방식이 override에 오염되지 않아야 한다.
+  setNowOverride(new Date(2026, 7, 3, 13, 30));
+  try {
+    assert.equal(getCurrentPeriodIndex(new Date(2026, 6, 31, 9, 45)), 1);
+  } finally {
+    setNowOverride(null);
+  }
 });

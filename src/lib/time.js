@@ -1,5 +1,37 @@
 import { PERIODS } from '../data/schedule.js';
 
+// ─────────────────────────────────────────────
+// 데모용 시각 이동
+// 방과 후·주말에 화면을 시연해야 할 때, 수업 중인 것처럼 보이도록 "지금"을
+// 옮긴다. 시각을 한 지점에 고정하지 않고 실제 시각과의 차이(offset)만 두므로
+// 시계도 계속 흐르고, 쉬는 시간 이동 애니메이션처럼 시간에 따라 변하는 것들도
+// 그대로 동작한다.
+//
+// 이 파일의 함수들이 인자 없이 호출될 때 쓰는 기본 "지금"을 바꾸는 것이므로,
+// setNowOverride를 부르지 않으면 동작은 예전과 완전히 동일하다.
+// ─────────────────────────────────────────────
+
+let _nowOffsetMs = 0;
+
+/**
+ * "지금"을 target 시각으로 옮긴다. null을 주면 실제 시각으로 되돌린다.
+ * @param {Date|null} target
+ */
+export function setNowOverride(target) {
+  _nowOffsetMs = target == null ? 0 : target.getTime() - Date.now();
+}
+
+/** 시각이 옮겨져 있는지 여부 (화면에 표시할지 판단용) */
+export function isNowOverridden() {
+  return _nowOffsetMs !== 0;
+}
+
+/** 이 모듈이 쓰는 "지금". setNowOverride로 옮겨졌으면 옮겨진 시각. */
+export function nowDate() {
+  return _nowOffsetMs === 0 ? new Date() : new Date(Date.now() + _nowOffsetMs);
+}
+
+
 /** "HH:MM" → 분 수 */
 export function toMins(t) {
   const [h, m] = t.split(':').map(Number);
@@ -10,7 +42,7 @@ export function toMins(t) {
  * 현재 시각 → 분 수
  * @param {Date} [now] - 생략하면 실제 현재 시각. 테스트에서 특정 시각을 고정하는 데 사용.
  */
-export function getNowMins(now = new Date()) {
+export function getNowMins(now = nowDate()) {
   return now.getHours() * 60 + now.getMinutes();
 }
 
@@ -19,7 +51,7 @@ export function getNowMins(now = new Date()) {
  * @param {Date} [now]
  * @returns {number} 0~7 | -1(쉬는시간·방과후)
  */
-export function getCurrentPeriodIndex(now = new Date()) {
+export function getCurrentPeriodIndex(now = nowDate()) {
   const m = getNowMins(now);
   for (let i = 0; i < PERIODS.length; i++) {
     if (m >= toMins(PERIODS[i].start) && m < toMins(PERIODS[i].end)) return i;
@@ -32,7 +64,7 @@ export function getCurrentPeriodIndex(now = new Date()) {
  * @param {Date} [now]
  * @returns {number} 0~7 | -1(방과후)
  */
-export function getNextPeriodIndex(now = new Date()) {
+export function getNextPeriodIndex(now = nowDate()) {
   const m = getNowMins(now);
   for (let i = 0; i < PERIODS.length; i++) {
     if (toMins(PERIODS[i].start) > m) return i;
@@ -45,7 +77,7 @@ export function getNextPeriodIndex(now = new Date()) {
  * @param {Date} [now]
  * @returns {number} 교시 인덱스 | -1(쉬는시간 아님)
  */
-export function getBreakAfterIndex(now = new Date()) {
+export function getBreakAfterIndex(now = nowDate()) {
   const m = getNowMins(now);
   for (let i = 0; i < PERIODS.length - 1; i++) {
     const end   = toMins(PERIODS[i].end);
@@ -64,7 +96,7 @@ export function getBreakAfterIndex(now = new Date()) {
  * @param {Date} [now]
  * @returns {string}
  */
-export function getPeriodStatusLabel(now = new Date()) {
+export function getPeriodStatusLabel(now = nowDate()) {
   const pi = getCurrentPeriodIndex(now);
   if (pi >= 0) return PERIODS[pi].label;
   return getBreakAfterIndex(now) >= 0 ? '쉬는 시간' : '방과후';
@@ -78,7 +110,7 @@ export function getPeriodStatusLabel(now = new Date()) {
  * 위치를 미리 보여주기 위함. 주말 여부 자체는 isWeekend()로 별도 확인한다.
  * @param {Date} [now]
  */
-export function getTodayIndex(now = new Date()) {
+export function getTodayIndex(now = nowDate()) {
   const day = now.getDay(); // 0=일 ~ 6=토
   if (day === 0 || day === 6) return 0; // 주말은 월요일(0) 시간표로 고정
   return day - 1;
@@ -89,7 +121,7 @@ export function getTodayIndex(now = new Date()) {
  * @param {Date} [now]
  * @returns {boolean}
  */
-export function isWeekend(now = new Date()) {
+export function isWeekend(now = nowDate()) {
   const day = now.getDay();
   return day === 0 || day === 6;
 }
@@ -102,7 +134,7 @@ export function isWeekend(now = new Date()) {
  * @param {Date} [d]
  * @returns {string}
  */
-export function getLocalDateStr(d = new Date()) {
+export function getLocalDateStr(d = nowDate()) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
